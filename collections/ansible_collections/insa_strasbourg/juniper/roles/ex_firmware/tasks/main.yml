@@ -1,0 +1,167 @@
+---
+
+# ansible-juniper-collection: Ansible collection to configure and deploy firmware on
+# Juniper EX switches
+# Copyright (C) 2020-2025 INSA Strasbourg
+#
+# This file is part of ansible-juniper-collection.
+#
+# ansible-juniper-collection is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# ansible-juniper-collection is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with ansible-juniper-collection. If not, see <https://www.gnu.org/licenses/>.
+
+- name: Gather localhost facts (to retrieve date for reboot)
+  delegate_to: localhost
+  ansible.builtin.setup:
+  tags: always
+
+
+- name: Gather Junos facts
+  juniper.device.facts:
+  tags: always
+
+
+- name: Compare running firmware version with latest
+  ansible.builtin.debug:
+    msg: >-
+      Not running latest firmware !
+      Running {{ ansible_facts.junos.version }}, latest
+      is {{ ex_firmware_version | default(ex_firmware | regex_replace('^.*-(\d{2}\..*\d).*$', '\1')) }}
+  when: ansible_facts.junos.version != ex_firmware_version | default(ex_firmware|regex_replace('^.*-(\\d{2}\\..*\\d).*$', '\\1'))
+  tags:
+    - never
+    - check
+
+
+- name: Ensure that device is not critical
+  delegate_to: localhost
+  ansible.builtin.fail:
+    msg: "Device is critical : please update firmware manually"
+  when: >
+    'install_on_critical' not in ansible_run_tags and
+    'check' not in ansible_run_tags and
+    'juniper_critical_devices' in group_names
+  tags: always
+
+
+- name: Ensure that device is not a virtual chassis
+  delegate_to: localhost
+  ansible.builtin.fail:
+    msg: "Device is a virtual chassis : please update firmware manually"
+  when: >
+    'check' not in ansible_run_tags and
+    'install_on_virtual_chassis_only' not in ansible_run_tags and
+    ansible_facts.junos.has_2RE
+  tags: install_on_critical
+
+
+- name: Ensure that device is a virtual chassis
+  delegate_to: localhost
+  ansible.builtin.fail:
+    msg: "Device is not a virtual chassis : ignoring"
+  when: >
+    'check' not in ansible_run_tags and
+    not ansible_facts.junos.has_2RE
+  tags:
+    - never
+    - install_on_virtual_chassis_only
+
+
+- name: Install Junos OS package
+  juniper.device.software:
+    remote_package: "{{ ex_firmware_baseurl }}/{{ ex_firmware_dir }}/{{ ex_firmware }}"
+    validate: "{{ ex_firmware_validate }}"
+    reboot: false
+    version: "{{ ex_firmware_version | default(ex_firmware | regex_replace('^.*-(\\d{2}\\..*\\d).*$', '\\1')) }}"
+  notify: Plan reboot during next night
+  register: _ex_firmware_version_was_updated
+  when: not ansible_facts.junos.has_2RE
+  tags: install_on_critical
+
+
+- name: Install Junos OS package on virtual chassis
+  juniper.device.software:
+    remote_package: "{{ ex_firmware_baseurl }}/{{ ex_firmware_dir }}/{{ ex_firmware }}"
+    validate: "{{ ex_firmware_validate }}"
+    reboot: false
+    nssu: true
+    version: "{{ ex_firmware_version | default(ex_firmware | regex_replace('^.*-(\\d{2}\\..*\\d).*$', '\\1')) }}"
+  register: _ex_firmware_version_was_updated
+  when: ansible_facts.junos.has_2RE
+  tags: install_on_virtual_chassis_only
+
+
+- name: Flush handlers
+  ansible.builtin.meta: flush_handlers
+
+
+- name: Manage snaphsots
+  when: not (_ex_firmware_version_was_updated.changed | default(false)) and ex_firmware_snapshot_cmd != ""
+  block:
+
+    - name: Retrieve system snapshot informations
+      juniper.device.command:
+        commands: "show system snapshot media internal"
+        timeout: 1800
+        formats: "{{ ex_firmware_snapshot_version_format }}"
+      register: _ex_firmware_version_stdout
+      tags: always
+
+
+    - name: Filter snapshot versions from output
+      ansible.builtin.set_fact:
+        _ex_firmware_version_versions: >-
+          {{ _ex_firmware_version_versions | default([]) + [item | regex_replace('^ *(Junos version|junos-ex.*|jweb-ex.*): *(.*)$', '\2')] }}
+      loop: "{{ _ex_firmware_version_stdout.stdout_lines }}"
+      when: "ex_firmware_snapshot_version_format != 'json' and item is search('^ *(Junos version|junos-ex.*|jweb-ex.*): *(.*)$')"
+      tags: always
+
+
+    - name: Filter snapshot versions from output
+      ansible.builtin.set_fact:
+        _ex_firmware_version_versions: >-
+          {{ _ex_firmware_version_versions | default([]) + [item | regex_replace('^ *(Junos version|junos-ex.*|jweb-ex.*): *(.*)$', '\2')] }}
+      loop: "{{ _ex_firmware_version_stdout.parsed_output['multi-routing-engine-results'].0['multi-routing-engine-item'].0.output.0.data.split('\n') }}"
+      when: "ex_firmware_snapshot_version_format == 'json' and item is search('^ *(Junos version|junos-ex.*|jweb-ex.*): *(.*)$')"
+      tags: always
+
+
+    - name: Filter versions that differs from running firmware
+      ansible.builtin.set_fact:
+        _ex_firmware_version_oldversions: "{{ _ex_firmware_version_oldversions | default([]) + [item] }}"
+      loop: "{{ _ex_firmware_version_versions | default(['0.0']) }}"
+      when: "item != ansible_facts.junos.version"
+      tags: always
+
+
+    - name: Compare running firmware version with snapshot version
+      delegate_to: localhost
+      ansible.builtin.fail:
+        msg: "Snapshot is outdated ! Snapshot is {{ _ex_firmware_version_oldversions.0 }}, firmware is {{ ansible_facts.junos.version }}"
+      when: _ex_firmware_version_oldversions|default([])|length > 0
+      failed_when: false
+      tags:
+        - never
+        - check
+
+
+    - name: "Snapshot is outdated : request new system snapshot"
+      juniper.device.command:
+        commands: "{{ ex_firmware_snapshot_cmd }}"
+        timeout: 1800
+      changed_when: true
+      when: >
+        'check' not in ansible_run_tags and
+        oldversions|default([])|length > 0
+      tags:
+        - install_on_critical
+        - install_on_virtual_chassis_only

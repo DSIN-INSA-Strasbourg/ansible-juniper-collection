@@ -1,0 +1,311 @@
+#! /bin/bash
+
+# ansible-juniper-collection: Ansible collection to configure and deploy firmware on
+# Juniper EX switches
+# Copyright (C) 2022-2025 INSA Strasbourg
+#
+# This file is part of ansible-juniper-collection.
+#
+# ansible-juniper-collection is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# ansible-juniper-collection is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with ansible-juniper-collection. If not, see <https://www.gnu.org/licenses/>.
+
+###########################
+# CONFIG
+
+# Validated versions of python, space separated
+# Order from favorite to least favorite version
+# https://docs.ansible.com/ansible/latest/reference_appendices/release_and_maintenance.html#ansible-core-support-matrix
+# --> Juniper.device 1.0.7 seems incompatible with python3.13 <--
+validpythonversions="python3.12 python3.11"
+
+# Dependencies to install with apt
+aptdeps="direnv python3-venv sshpass whois libssh-dev"
+
+# Virtualenv directory name
+venvdir=".venv-ansible"
+
+# Dir name that will contain ansible collections/roles
+ansiblecachedir=".ansible"
+
+# /CONFIG
+###########################
+
+function usage {
+    echo "Usage : $0 [-e] [-p] [-a] [-h] [-d] [-l] [-c] [-s]" >&2
+    echo "" >&2
+    echo "options:" >&2
+    echo "  -e, --dont-recreate-venv" >&2
+    echo "             Don't delete and recreate current virtualenv." >&2
+    echo "             WARNING : If you specify this option and no virtualenv exists," >&2
+    echo "             python requirements will be installed in your user environment" >&2
+    echo "  -d, --dont-delete-ansible-dir" >&2
+    echo "             Don't delete .ansible directory." >&2
+    echo "             Currently installed roles and collections will be kept" >&2
+    echo "  -p, --dont-install-python-requirements" >&2
+    echo "             Don't install python requirements from requirements-python.txt" >&2
+    echo "  -a, --dont-install-ansible-requirements" >&2
+    echo "             Don't install ansible requirements from requirements.yml" >&2
+    echo "" >&2
+    echo "  -l, --install-ansible-lint" >&2
+    echo "             Install ansible-lint" >&2
+    echo "  -c, --install-ansible-vscode-extensions" >&2
+    echo "             Install ansible extension (redhat.ansible) for vscode" >&2
+    echo "  -s, --install-ansible-vscode-settings" >&2
+    echo "             Install ansible extension's required settings for vscode" >&2
+    echo "" >&2
+    echo "  -h, --help" >&2
+    echo "             Show this help message and exit" >&2
+}
+
+options=$(getopt -o edpahlcs --long help,dont-recreate-venv,dont-delete-ansible-dir,dont-install-python-requirements,dont-install-ansible-requirements,install-ansible-lint,install-ansible-vscode-extensions,install-ansible-vscode-settings -- "$@")
+[ $? -eq 0 ] || { 
+    echo -e "Incorrect options provided\n" >&2
+    usage
+    exit 1
+}
+eval set -- "$options"
+while true; do
+    case "$1" in
+    -e | --dont-recreate-venv)
+        DONTRECREATEVENV=1
+        ;;
+    -d | --dont-delete-ansible-dir)
+        DONTDELETEANSIBLEDIR=1
+        ;;
+    -p | --dont-install-python-requirements)
+        DONTINSTALLPYTHONREQUIREMENTS=1
+        ;;
+    -a | --dont-install-ansible-requirements)
+        DONTINSTALLANSIBLEREQUIREMENTS=1
+        ;;
+    -l | --install-ansible-lint)
+        INSTALLANSIBLELINT=1
+        ;;
+    -c | --install-ansible-vscode-extensions)
+        INSTALLANSIBLEVSCODEEXTS=1
+        ;;
+    -s | --install-ansible-vscode-settings)
+        INSTALLANSIBLEVSCODESETTINGS=1
+        ;;
+    -h | --help)
+        usage
+        exit 0
+        ;;
+    --)
+        shift
+        break
+        ;;
+    *)
+    esac
+    shift
+done
+
+
+# Checking for a valid version of python
+PYTHONCMD=UNDEF
+for pyver in ${validpythonversions}
+do
+    if command -v "${pyver}" &> /dev/null
+    then
+        PYTHONCMD="${pyver}"
+        break
+    fi
+done
+
+if [ "${PYTHONCMD}" == "UNDEF" ]
+then
+    echo "No validated version of python found - abort" >&2
+    exit 1
+fi
+
+if ! command -v "direnv" &> /dev/null
+then
+    echo "direnv was not found in \$PATH - abort" >&2
+    exit 1
+fi
+
+# Check if dependencies are installed, and install the missing ones
+needsapt=no
+for pkg in ${aptdeps}
+do
+    if ! dpkg-query --show --showformat='${db:Status-Status}\n' ${pkg} &> /dev/null
+    then
+        needsapt=yes
+        break
+    fi
+done
+
+if [ "${needsapt}" == "yes" ]
+then
+    echo -e "*** Install dependencies ***\n"
+    echo "sudo apt install ${aptdeps}"
+    sudo apt update && sudo apt install ${aptdeps} --yes
+fi
+
+
+# Adding the folder to the allowed folders for direnv
+direnv allow
+
+if [ -z ${DIRENV_DIR+x} ]
+then
+    # Direnv does not seem active, we are trying to reload its helpers
+    . "${HOME}/.bashrc"
+fi
+
+if [ -z ${DIRENV_DIR+x} ]
+then
+    # Direnv is still not active
+    echo -e "direnv is not active, please add this to your '${HOME}/.bashrc' and reload your bash session before running this script again :\n"
+    cat << 'EOF'
+#########
+# direnv
+eval "$(direnv hook bash)"
+show_virtual_env() {
+    if [[ -n "$VIRTUAL_ENV" && -n "$DIRENV_DIR" ]]; then
+        echo "($(basename $VIRTUAL_ENV)) "
+    fi
+}
+export -f show_virtual_env
+PS1='$(show_virtual_env)'$PS1
+# /direnv
+#########
+EOF
+
+    echo -e "\ndirenv is not active - abort" >&2
+    exit 1
+fi
+
+
+# Checking that the current directory is indeed the root of the repository
+if [ "${DIRENV_DIR:1}" != "${PWD}" ]
+then
+    echo "[Error] This script must be executed from the folder where it is located - abort" >&2
+    exit 1
+fi
+
+
+# Creating virtualenv
+if [ -z ${DONTRECREATEVENV+x} ]
+then
+    [ -d "${venvdir}" ] && rm -Rf "${venvdir}"
+    if [ -e "${venvdir}" ]
+    then
+        echo "[Error] Virtualenv folder target '${venvdir}' exists, but is not a folder - abort" >&2
+        exit 1
+    fi
+    ${PYTHONCMD} -m venv "${venvdir}"
+
+    # Force venv reload
+    eval "$(direnv export ${SHELL})"
+fi
+
+# Deleting the directory containing ansible collections/roles
+if [ -z ${DONTDELETEANSIBLEDIR+x} ]
+then
+    [ -d "${ansiblecachedir}" ] && rm -Rf "${ansiblecachedir}"
+    if [ -e "${ansiblecachedir}" ]
+    then
+        echo "[Error] Ansible collections/roles folder '${ansiblecachedir}' exists, but is not a folder - abort" >&2
+        exit 1
+    fi
+fi
+mkdir -p "${ansiblecachedir}"
+
+
+if [ -z ${DONTINSTALLPYTHONREQUIREMENTS+x} ]
+then
+    # Installing python packages needed to install other python packages (community.vmware dependency)
+    pip3 install wheel
+    # Installing Ansible and Python dependencies
+    echo -e "\n\n*** Installing Ansible and Python dependencies ***\n"
+    pip3 install -r requirements-python.txt
+fi
+
+if [ -z ${DONTINSTALLANSIBLEREQUIREMENTS+x} ]
+then
+    # Installing Ansible external collections and roles
+    echo -e "\n\n*** Installing Ansible external collections and roles ***\n"
+    ansible-galaxy install -r requirements.yml
+fi
+
+if [ ! -z ${INSTALLANSIBLELINT+x} ]
+then
+    # Installing ansible-lint and its Python dependencies
+    echo -e "\n\n*** Installing ansible-lint and its Python dependencies ***\n"
+    pip3 install -r requirements-python-ansible-lint.txt
+fi
+
+if [ ! -z ${INSTALLANSIBLEVSCODEEXTS+x} ]
+then
+    # Installing ansible extension for vscode
+    echo -e "\n\n*** Installing ansible extension for vscode ***\n"
+    if command -v "code" &> /dev/null
+    then
+        code --install-extension redhat.ansible
+    else
+        echo "[Warning] The 'code' command was not found, unable to install the extension" >&2
+    fi
+fi
+
+if [ ! -z ${INSTALLANSIBLEVSCODESETTINGS+x} ]
+then
+    # Installing vscode workspace folder config
+    mkdir -p .vscode
+    dest=".vscode/settings.json"
+    if [ -e "${dest}" ]
+    then
+        echo -e "\n\n*** [WARNING] The VSCode workspace folder configuration '${dest}' already exist." >&2
+        echo -e "              Installing an example configuration in '${dest}.reset_ansible_env' ***\n" >&2
+        dest="${dest}.reset_ansible_env"
+    else
+        echo -e "\n\n*** Installing VSCode workspace folder configuration in '${dest}' ***\n"
+    fi
+    cat << EOF > "${dest}"
+{
+    "ansible.python.activationScript": "${venvdir}/bin/activate",
+    "files.associations": {
+        "*.yml": "ansible",
+        "*.yaml": "ansible"
+    }
+}
+EOF
+
+    # Installing VSCode workspace file
+    mkdir -p .vscode
+    workspace=$(basename $PWD)
+    dest=".vscode/${workspace}.code-workspace"
+    if [ -e "${dest}" ]
+    then
+        echo -e "*** [WARNING] The VSCode workspace file '${dest}' already exist." >&2
+        echo -e "              Installing the VSCode workspace file in '${dest}.reset_ansible_env' ***\n" >&2
+        dest="${dest}.reset_ansible_env"
+    else
+        echo -e "*** Installing the VSCode workspace file in '${dest}' ***\n"
+    fi
+    cat << EOF > "${dest}"
+{
+	"folders": [
+		{
+			"path": "${PWD}"
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"*.yml": "ansible",
+			"*.yaml": "ansible"
+		},
+		"ansible.python.activationScript": "${venvdir}/bin/activate"
+	},
+}
+EOF
+fi

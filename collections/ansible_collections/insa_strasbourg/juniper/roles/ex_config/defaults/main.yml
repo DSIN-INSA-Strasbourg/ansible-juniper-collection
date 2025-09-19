@@ -1,0 +1,121 @@
+---
+
+# ansible-juniper-collection: Ansible collection to configure and deploy firmware on
+# Juniper EX switches
+# Copyright (C) 2019-2025 INSA Strasbourg
+#
+# This file is part of ansible-juniper-collection.
+#
+# ansible-juniper-collection is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# ansible-juniper-collection is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with ansible-juniper-collection. If not, see <https://www.gnu.org/licenses/>.
+
+ex_config_save_dir: "{{ lookup('env', 'HOME') }}/.juniper-configs"
+
+# In minutes - should be quite higher than ex_config_delay_between_commitconfirm_and_commit to avoid
+# an unnecessary rollback when playbook is ran on multiple devices
+ex_config_commitconfirm_delay: 5
+
+# In seconds
+ex_config_delay_between_commitconfirm_and_commit: 15
+
+# Valid values are sha256 and md5. You really should use sha256.
+# md5 is kept for old devices running a firmware on v12 or below,
+# as sha256 isn't available before v15
+ex_config_password_hashtype: sha256
+ex_config_password_salt: CHANGEME
+
+# ex_config_hostname: hostname
+# ex_config_location: room_number
+# ex_config_mgmtvlan: mgmt_vlan_name
+# ex_config_ipaddress: 192.168.1.42
+# ex_config_netmask: 255.255.255.0
+# ex_config_gateway: 192.168.1.254
+
+# ex_config_domainname: example.com
+ex_config_domainsearch: []
+# ex_config_domainsearch:
+#   - example.com
+ex_config_nameservers: []
+# ex_config_nameservers:
+#   - 192.168.1.252
+#   - 192.168.1.253
+
+
+ex_config_interfaces: []
+ex_config_laggs: []
+ex_config_firewall_denied_ips: []
+ex_config_igmpquerier: {}
+ex_config_mldquerier: {}
+
+ex_config_mstp_all_vlans: []
+
+ex_config_ntpservers: []
+
+ex_config_poeenabled: true
+
+ex_config_qos: {}
+
+ex_config_radiusservers: []
+
+ex_config_snmpcommunities: []
+ex_config_snmptrapgroups: []
+
+ex_config_enable_stormcontrol: true
+ex_config_stormcontrol_bandwidthlevel: 4000
+ex_config_stormcontrol_shutdown: false
+ex_config_stormcontrol_disable_timeout: 60
+ex_config_stormcontrol_monitor_broadcast: true
+ex_config_stormcontrol_monitor_multicast: false
+ex_config_stormcontrol_monitor_registered_multicast: false
+ex_config_stormcontrol_monitor_unregistered_multicast: false
+ex_config_stormcontrol_monitor_unknown_unicast: false
+
+ex_config_syslogservers: []
+
+ex_config_users: []
+ex_config_user_classes: []
+
+ex_config_portsecurity_enable_dhcpsnooping: false
+ex_config_portsecurity_enable_dynamic_arp_inspection: false # Can't be enabled if ex_config_portsecurity_enable_dhcpsnooping is set to no
+ex_config_portsecurity_enable_ip_source_guard: false # Can't be enabled if ex_config_portsecurity_enable_dhcpsnooping is set to no
+
+ex_config_stormtrusted_default: false
+ex_config_bpdu_block_default: false
+# ex_config_dhcptrusted_default: false  # When unset, will enforce default Juniper logic : enabled on access ports, disabled on trunks
+
+ex_config_trusted_settings:
+  is_uplink: true
+  no_maxhosts: true
+  dhcptrusted: true
+  stormtrusted: true
+
+ex_config_vlans: []
+  # - name: vlan10
+  #   description: "VLAN 10 desc"
+  #   vlanid: 10
+  #   dhcpsnooping: false
+  # - name: vlan11
+  #   description: "VLAN 11 desc"
+  #   vlanid: 11
+
+ex_config_enable_rootprotection: false
+
+ex_config_stp:
+  protocol: rstp
+
+ex_config_stp_default_bridge_priority: 32k
+ex_config_stp_default_edge_link_cost: "200000000"
+
+ex_config_virtual_chassis: []
+
+ex_config_enable_netmagis_descriptions: false

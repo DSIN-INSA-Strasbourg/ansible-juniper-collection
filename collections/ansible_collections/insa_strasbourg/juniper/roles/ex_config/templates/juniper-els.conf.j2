@@ -1,0 +1,1293 @@
+#jinja2: lstrip_blocks: True, trim_blocks: True
+{#
+ansible-juniper-collection: Ansible collection to configure and deploy firmware on
+Juniper EX switches
+Copyright (C) 2019-2025 INSA Strasbourg
+
+This file is part of ansible-juniper-collection.
+
+ansible-juniper-collection is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+ansible-juniper-collection is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with ansible-juniper-collection. If not, see <https://www.gnu.org/licenses/>.
+#}
+version 18.3R1.9;
+{# QoS #}
+{% if ex_config_qos|length > 0 %}
+groups {
+    {# QoS configs #}
+    {% for qosname, qosconfig in ex_config_qos.items() %}
+    {{ qosname }} {
+        {# IP prefixes definitions #}
+        {% if qosconfig.ip_prefixes|default({})|length > 0 %}
+        policy-options {
+            {% for name, ranges in qosconfig.ip_prefixes.items() %}
+            prefix-list {{ name }} {
+                {% for range in ranges %}
+                {{ range }};
+                {% endfor %}
+            }
+            {% endfor %}
+        }
+        {% endif %}
+        {# /IP prefixes definitions #}
+        class-of-service {
+        {# Definition of DSCP code-points alias for BA classifiers #}
+        {% if qosconfig.classes | selectattr('codepoints', 'defined') | selectattr('loss_priority', 'defined') | list | length > 0 %}
+            classifiers {
+                dscp dscp_ba {
+                    import default;
+            {% for class in qosconfig.classes | selectattr('codepoints', 'defined') | selectattr('loss_priority', 'defined') | list  %}
+                    forwarding-class {{ class.name }} {
+                        loss-priority {{ class.loss_priority }} code-points {{ class.codepoints }};
+                    }
+            {% endfor %}
+                }
+            }
+        {% endif %}
+        {# /Definition of DSCP code-points alias for BA classifiers #}
+        {# Forwarding-classes settings #}
+        {% if qosconfig.classes | selectattr('queuenum', 'defined') | list | length > 0 %}
+            forwarding-classes {
+            {% for class in qosconfig.classes | selectattr('queuenum', 'defined') | list  %}
+                class {{ class.name }} queue-num {{ class.queuenum }};
+            {% endfor %}
+            }
+        {% endif %}
+        {# /Forwarding-classes settings #}
+        {# forwarding-class-sets (EX4600) #}
+        {% if group_names | intersect(['juniper_ex4600']) %}
+            {% if qosconfig.classes | selectattr('scheduler', 'defined') | list | length > 0 %}
+            forwarding-class-sets {
+                {% if qosconfig.classes | selectattr('scheduler.priority', 'defined') | selectattr('scheduler.priority', 'ne', 'strict-high') | list | length > 0 
+                    or qosconfig.classes | selectattr('scheduler.priority', 'undefined') | list | length > 0
+                %}
+                core-port-pg {
+                    {% for class in qosconfig.classes | selectattr('scheduler.priority', 'defined') | selectattr('scheduler.priority', 'ne', 'strict-high') | list %}
+                    class {{ class.name }};
+                    {% endfor %}
+                    {% for class in qosconfig.classes | selectattr('scheduler.priority', 'undefined') | list %}
+                    class {{ class.name }};
+                    {% endfor %}
+                }
+                {% endif %}
+                {% if qosconfig.classes | selectattr('scheduler.priority', 'defined') | selectattr('scheduler.priority', 'equalto', 'strict-high') | list | length > 0 %}
+                core-port-high-priority-pg {
+                    {% for class in qosconfig.classes | selectattr('scheduler.priority', 'defined') | selectattr('scheduler.priority', 'equalto', 'strict-high') | list %}
+                    class {{ class.name }};
+                    {% endfor %}
+                }
+                {% endif %}
+            }
+            {% endif %}
+        {% endif %}
+        {# /forwarding-class-sets (EX4600) #}
+        {# traffic-control-profiles (EX4600) #}
+        {% if group_names | intersect(['juniper_ex4600']) %}
+            traffic-control-profiles {
+                core-port-tcp {
+                    scheduler-map core-port-sched;
+            {# Calculate guaranteed-rate as sum of all transmit-rate #}
+            {% set guaranteedrate = namespace(value=0) %}
+            {% set guaranteedratepercent = namespace(value=0) %}
+            {% for class in qosconfig.classes | selectattr('scheduler.priority', 'defined') | selectattr('scheduler.priority', 'ne', 'strict-high') | list %}
+                {% if class.scheduler.transmit_rate is defined %}
+                    {% if class.scheduler.transmit_rate[-1] == '%' %}
+                        {% set guaranteedratepercent.value = guaranteedratepercent.value + class.scheduler.transmit_rate[:-1] | int %}
+                    {% else %}
+                        {% set guaranteedrate.value = guaranteedrate.value + class.scheduler.transmit_rate[:-1] | int %}
+                    {% endif %}
+                {% endif %}
+            {% endfor %}
+            {% for class in qosconfig.classes | selectattr('scheduler.priority', 'undefined') | list %}
+                {% if class.scheduler.transmit_rate is defined %}
+                    {% if class.scheduler.transmit_rate[-1] == '%' %}
+                        {% set guaranteedratepercent.value = guaranteedratepercent.value + class.scheduler.transmit_rate[:-1] | int %}
+                    {% else %}
+                        {% set guaranteedrate.value = guaranteedrate.value + class.scheduler.transmit_rate[:-1] | int %}
+                    {% endif %}
+                {% endif %}
+            {% endfor %}
+            {# Error handling #}
+            {% if guaranteedratepercent.value > 0 -%}
+                {{- ('' if guaranteedrate.value == 0 or guaranteedratepercent.value == 0) | mandatory("Unable to calculate guaranteed-rate : you can't mix scheduler's transmit-rate in percent and raw values") }}
+                {{- ('' if guaranteedratepercent.value <= 100 ) | mandatory("guaranteed-rate (" + guaranteedratepercent.value | string + "%) exceed 100% : you should review scheduler's transmit-rate, their sum can't exceed 100%") }}
+            {%- endif %}
+            {# Output #}
+            {% if guaranteedrate.value > 0 %}
+                    guaranteed-rate {{ guaranteedrate.value }};
+            {% endif %}
+            {% if guaranteedratepercent.value > 0 %}
+                    guaranteed-rate percent {{ guaranteedratepercent.value }};
+            {% endif %}
+                }
+            {% if qosconfig.classes | selectattr('scheduler.priority', 'defined') | selectattr('scheduler.priority', 'equalto', 'strict-high') | list | length > 0 %}
+                core-port-high-priority-tcp {
+                    scheduler-map core-port-high-priority-sched;
+                {# Calculate guaranteed-rate as sum of all transmit-rate #}
+                {% set guaranteedrate = namespace(value=0) %}
+                {% set guaranteedratepercent = namespace(value=0) %}
+                {% for class in qosconfig.classes | selectattr('scheduler.priority', 'defined') | selectattr('scheduler.priority', 'equalto', 'strict-high') | list %}
+                    {% if class.scheduler.transmit_rate is defined %}
+                        {% if class.scheduler.transmit_rate[-1] == '%' %}
+                            {% set guaranteedratepercent.value = guaranteedratepercent.value + class.scheduler.transmit_rate[:-1] | int %}
+                        {% else %}
+                            {% set guaranteedrate.value = guaranteedrate.value + class.scheduler.transmit_rate[:-1] | int %}
+                        {% endif %}
+                    {% endif %}
+                {% endfor %}
+                {# Error handling #}
+                {% if guaranteedratepercent.value > 0 -%}
+                    {{- ('' if guaranteedrate.value == 0 or guaranteedratepercent.value == 0) | mandatory("Unable to calculate guaranteed-rate : you can't mix scheduler's transmit-rate in percent and raw values") }}
+                    {{- ('' if guaranteedratepercent.value <= 100 ) | mandatory("guaranteed-rate (" + guaranteedratepercent.value | string + "%) exceed 100% : you should review scheduler's transmit-rate, their sum can't exceed 100%") }}
+                {%- endif %}
+                {# Output #}
+                {% if guaranteedrate.value > 0 %}
+                    guaranteed-rate {{ guaranteedrate.value }};
+                {% endif %}
+                {% if guaranteedratepercent.value > 0 %}
+                    guaranteed-rate percent {{ guaranteedratepercent.value }};
+                {% endif %}
+                }
+            {% endif %}
+            }
+        {% endif %}
+        {# /traffic-control-profiles (EX4600) #}
+        {# Rewrite-rules settings #}
+        {% if qosconfig.classes | selectattr('mf_classifier_rules', 'defined') | list | length > 0
+            and qosconfig.classes | selectattr('codepoints', 'defined') | selectattr('loss_priority', 'defined') | list | length > 0 %}
+            rewrite-rules {
+                dscp rewrite-dscp {
+                    import default;
+            {% for class in qosconfig.classes | selectattr('codepoints', 'defined') | selectattr('loss_priority', 'defined') | list  %}
+                    forwarding-class {{ class.name }} {
+                        loss-priority {{ class.loss_priority }} code-point {{ class.codepoints }};
+                    }
+            {% endfor %}
+                }
+            }
+        {% endif %}
+        {# /Rewrite-rules settings #}
+        {# Scheduler-maps settings #}
+        {% if qosconfig.classes | selectattr('scheduler', 'defined') | list | length > 0 %}
+            scheduler-maps {
+            {# scheduler-maps for EX4600/EX4650 #}
+            {% if group_names | intersect(['juniper_ex4600', 'juniper_ex4650']) %}
+                core-port-sched {
+                {% for class in qosconfig.classes | selectattr('scheduler.priority', 'defined') | selectattr('scheduler.priority', 'ne', 'strict-high') | list %}
+                    forwarding-class {{ class.name }} scheduler {{ class.name }}-sched;
+                {% endfor %}
+                {% for class in qosconfig.classes | selectattr('scheduler.priority', 'undefined') | list %}
+                    forwarding-class {{ class.name }} scheduler {{ class.name }}-sched;
+                {% endfor %}
+                }
+                {% if qosconfig.classes | selectattr('scheduler.priority', 'defined') | selectattr('scheduler.priority', 'equalto', 'strict-high') | list | length > 0 %}
+                core-port-high-priority-sched {
+                    {% for class in qosconfig.classes | selectattr('scheduler.priority', 'defined') | selectattr('scheduler.priority', 'equalto', 'strict-high') | list %}
+                    forwarding-class {{ class.name }} scheduler {{ class.name }}-sched;
+                    {% endfor %}
+                }
+                {% endif %}
+            {% else %}
+                core-port-sched {
+                {% for class in qosconfig.classes | selectattr('scheduler', 'defined') | list  %}
+                    forwarding-class {{ class.name }} scheduler {{ class.name }}-sched;
+                {% endfor %}
+                }
+            {% endif %}
+            }
+        {% endif %}
+        {# /Scheduler-maps settings #}
+        {# Schedulers #}
+        {% if qosconfig.classes | selectattr('scheduler', 'defined') | list | length > 0 %}
+            schedulers {
+            {% for class in qosconfig.classes | selectattr('scheduler', 'defined') | list  %}
+                {{ class.name }}-sched {
+                {% if 'buffer_size' in class.scheduler %}
+                    {% if class.scheduler.buffer_size[-1] == '%' %}
+                    buffer-size percent {{ class.scheduler.buffer_size[:-1] }};
+                    {% else %}
+                    buffer-size {
+                        remainder;
+                    }
+                    {% endif %}
+                {% endif %}
+                {% if 'transmit_rate' in class.scheduler %}
+                    {% if class.scheduler.transmit_rate[-1] == '%' %}
+                    transmit-rate percent {{ class.scheduler.transmit_rate[:-1] }};
+                    {% elif class.scheduler.transmit_rate == 'remainder' %}
+                    transmit-rate {
+                        remainder;
+                    }
+                    {% else %}
+                    transmit-rate {{ class.scheduler.transmit_rate }};
+                    {% endif %}
+                {% endif %}
+                {% if 'shaping_rate' in class.scheduler %}
+                    {% if class.scheduler.shaping_rate[-1] == '%' %}
+                    shaping-rate percent {{ class.scheduler.shaping_rate[:-1] }};
+                    {% else %}
+                    shaping-rate {{ class.scheduler.shaping_rate }};
+                    {% endif %}
+                {% endif %}
+                {% if 'priority' in class.scheduler %}
+                    priority {{ class.scheduler.priority }};
+                {% endif %}
+                }
+            {% endfor %}
+            }
+        {% endif %}
+        {# /Schedulers #}
+        }
+        {# Firewall + Policer #}
+        {% if qosconfig.classes | selectattr('mf_classifier_rules', 'defined') | list | length > 0 %}
+        firewall {
+            {# Firewall #}
+            family ethernet-switching {
+                filter bridge-qos-class {
+            {% for class in qosconfig.classes | selectattr('mf_classifier_rules', 'defined') | list  %}
+                {% for rule in class.mf_classifier_rules %}
+                    term {{ rule.name }} {
+                    {# Firewall from #}
+                    {% if rule.from | default({}) | length > 0 %}
+                        from {
+                        {% if 'protocol' in rule.from %}
+                            ip-protocol [ {{ rule.from.protocol|join(' ') }} ];
+                        {% endif %}
+                        {% if 'source_address' in rule.from %}
+                            source-address {
+                            {% for addr in rule.from.source_address %}
+                                {{ addr }};
+                            {% endfor %}
+                            }
+                        {% endif %}
+                        {% if 'source_prefix_list' in rule.from %}
+                            source-prefix-list {
+                            {% for prefix in rule.from.source_prefix_list %}
+                                {{ prefix }};
+                            {% endfor %}
+                            }
+                        {% endif %}
+                        {% if 'source_port' in rule.from %}
+                            source-port [ {{ rule.from.source_port|join(' ') }} ];
+                        {% endif %}
+                        {% if 'destination_address' in rule.from %}
+                            destination-address {
+                            {% for addr in rule.from.destination_address %}
+                                {{ addr }};
+                            {% endfor %}
+                            }
+                        {% endif %}
+                        {% if 'destination_prefix_list' in rule.from %}
+                            destination-prefix-list {
+                            {% for prefix in rule.from.destination_prefix_list %}
+                                {{ prefix }};
+                            {% endfor %}
+                            }
+                        {% endif %}
+                        {% if 'destination_port' in rule.from %}
+                            destination-port [ {{ rule.from.destination_port|join(' ') }} ];
+                        {% endif %}
+                        {% if 'vlan_id' in rule.from %}
+                            user-vlan-id [ {{ rule.from.vlan_id|join(' ') }} ];
+                        {% endif %}
+                        }
+                    {% endif %}
+                    {# /Firewall from #}
+                    {# Firewall then #}
+                    {% if rule.then | default({}) | length > 0 %}
+                        then {
+                        {% if 'forwarding_class' in rule.then and rule.then.forwarding_class == True %}
+                            forwarding-class {{ class.name }};
+                        {% endif %}
+                        {% if 'policer' in rule.then %}
+                            policer {{ rule.then.policer }};
+                        {% endif %}
+                        {% if 'loss_priority' in rule.then %}
+                            loss-priority {{ rule.then.loss_priority }};
+                        {% endif %}
+                        }
+                    }
+                    {% endif %}
+                    {# /Firewall then #}
+                {% endfor %}
+            {% endfor %}
+                }
+            }
+            {# /Firewall #}
+            {# Policer #}
+            {% for policer in qosconfig.policers | default([]) %}
+            policer {{ policer.name }} {
+                {% if policer.if_exceeding | default({}) | length > 0 %}
+                if-exceeding {
+                    {% if 'bandwidth_limit' in policer.if_exceeding %}
+                    bandwidth-limit {{ policer.if_exceeding.bandwidth_limit }};
+                    {% endif %}
+                    {% if 'burst_size_limit' in policer.if_exceeding %}
+                    burst-size-limit {{ policer.if_exceeding.burst_size_limit }};
+                    {% endif %}
+                }
+                {% endif %}
+                {% if policer.then | default({}) | length > 0 %}
+                then {
+                    {% if 'discard' in policer.then and policer.then.discard == true %}
+                    discard;
+                    {% endif %}
+                    {% if 'loss_priority' in policer.then %}
+                    loss-priority {{ policer.then.loss_priority }};
+                    {% endif %}
+                }
+                {% endif %}
+            }
+            {% endfor %}
+            {# /Policer #}
+        }
+        {% endif %}
+        {# /Firewall + Policer #}
+    }
+        {# Apply-conf #}
+    {{ qosname }}_applyconf {
+        {% if qosconfig.classes | selectattr('mf_classifier_rules', 'defined') | list | length > 0 %}
+        interfaces {
+            {# Edge interfaces (not uplink) #}
+            {% for interface in (ex_config_interfaces + ex_config_laggs) if not interface.used_by_lagg_or_vcport|default(false) and interface.member_of_lagg is not defined and not interface.is_uplink|default(false) %}
+            {{ interface.name }} {
+                unit 0 {
+                    family ethernet-switching {
+                        filter {
+                            input bridge-qos-class;
+                        }
+                    }
+                }
+            }
+            {% endfor %}
+        }
+        {% endif %}
+        class-of-service {
+            interfaces {
+        {% for interface in (ex_config_interfaces + ex_config_laggs) if not interface.used_by_lagg_or_vcport|default(false) and interface.member_of_lagg is not defined %}
+                {{ interface.name }} {
+            {% if group_names | intersect(['juniper_ex4600']) %}
+                    forwarding-class-set {
+                {% if qosconfig.classes | selectattr('scheduler.priority', 'defined') | selectattr('scheduler.priority', 'ne', 'strict-high') | list | length > 0 
+                    or qosconfig.classes | selectattr('scheduler.priority', 'undefined') | list | length > 0
+                %}
+                        core-port-pg {
+                            output-traffic-control-profile core-port-tcp;
+                        }
+                {% endif %}
+                {% if qosconfig.classes | selectattr('scheduler.priority', 'defined') | selectattr('scheduler.priority', 'equalto', 'strict-high') | list | length > 0 %}
+                        core-port-high-priority-pg {
+                            output-traffic-control-profile core-port-high-priority-tcp;
+                        }
+                {% endif %}
+                    }
+            {% else %}
+                    scheduler-map core-port-sched;
+            {% endif %}
+                    unit 0 {
+                        classifiers {
+                            dscp dscp_ba;
+                        }
+            {% if qosconfig.classes | selectattr('mf_classifier_rules', 'defined') | list | length > 0 %}
+                        rewrite-rules {
+                            dscp rewrite-dscp;
+                        }
+            {% endif %}
+                    }
+                }
+        {% endfor %}
+            }
+        }
+    }
+        {# /Apply-conf #}
+    {% endfor %}
+    {# /QoS configs #}
+}
+    {# Apply groups for enabled qos #}
+    {% set applygroups = [] %}
+    {% for qosname, qosconfig in ex_config_qos.items() if qosconfig.enabled | default(false) == true %}
+        {{- applygroups.append(qosname) -}}
+        {{- applygroups.append(qosname + '_applyconf') -}}
+    {% endfor %}
+    {% if applygroups | length > 0 %}
+apply-groups [ {{applygroups | join(' ')}} ];
+    {% endif %}
+    {# /Apply groups for enabled qos #}
+{% endif %}
+{# /QoS #}
+system {
+    host-name {{ ex_config_hostname }};
+{% if ex_config_domainname|length > 0 %}
+    domain-name {{ ex_config_domainname }};
+{% endif %}
+{% if ex_config_domainsearch|length > 0 %}
+    domain-search [ {{ ex_config_domainsearch|join(' ') }} ];
+{% endif %}
+{% if ex_config_nameservers|length > 0 %}
+    name-server {
+{%   for nameserver in ex_config_nameservers %}
+        {{ nameserver }};
+{%   endfor %}
+    }
+{% endif %}
+    time-zone Europe/Paris;
+    commit synchronize;
+{# root account #}
+    root-authentication {
+{% if ex_config_root_user.password is defined %}
+        encrypted-password "{{ ex_config_root_user.password | string | ansible.builtin.password_hash(hashtype=ex_config_password_hashtype, salt=ex_config_password_salt[:ex_config_password_salt_defaults[ex_config_password_hashtype].maxlen]) }}";
+{% endif %}
+    }
+{# /root account #}
+{% if ex_config_user_classes|length > 0 or ex_config_users|length > 0 %}
+    login {
+{# user classes #}
+{%   for user_class in ex_config_user_classes %}
+        class {{ user_class.name }} {
+            permissions [ {{ user_class.permissions | unique | sort | join(' ') }} ];
+        }
+{%   endfor %}
+{# /user classes #}
+{# user accounts #}
+{%   for user in ex_config_users %}
+        user {{ user.login }} {
+{%     if user.uid is defined %}
+            uid {{ user.uid }};
+{%     endif %}
+{%     if user.class is defined %}
+            class {{ user.class }};
+{%     endif %}
+{%     if user.password is defined or user.ssh_pubkeys is defined %}
+            authentication {
+{%       if user.password is defined %}
+                encrypted-password "{{ user.password | string | ansible.builtin.password_hash(hashtype=ex_config_password_hashtype, salt=ex_config_password_salt[:ex_config_password_salt_defaults[ex_config_password_hashtype].maxlen]) }}";
+{%       endif %}
+{%       for keytype, key in (user.ssh_pubkeys|default({})).items() %}
+                {{ keytype }} "{{ key }}";
+{%       endfor %}
+            }
+{%     endif %}
+        }
+{%   endfor %}
+{# /user accounts #}
+    }
+{% endif %}
+    services {
+        ssh {
+            root-login deny-password;
+        }
+        netconf {
+            ssh {
+                port 830;
+            }
+        }
+    }
+    syslog {
+        archive size 512k files 12;
+        user * {
+            any emergency;
+        }
+{% for syslogserver in ex_config_syslogservers %}
+        host {{ syslogserver.ip }} { # {{ syslogserver.comment }}
+            any notice;
+            authorization info;
+            security info;
+            interactive-commands any;
+            port {{ syslogserver.port }};
+        }
+{% endfor %}
+        file messages {
+            any notice;
+            authorization info;
+            security info;
+        }
+        file interactive-commands {
+            interactive-commands any;
+        }
+        file login-attempts {
+            authorization any;
+        }
+    }
+{% if ex_config_ntpservers | length > 0 %}
+    ntp {
+{%   for ntpserver in ex_config_ntpservers %}
+        server {{ ntpserver.ip }}; # {{ ntpserver.comment }}
+{%   endfor %}
+    }
+{% endif %}
+    processes {
+        jsd disable;
+{% if group_names | intersect(['juniper_ex4600', 'juniper_ex4650']) %}
+        na-grpc-server disable;
+{% endif %}
+{# Port-security #}
+{% if ex_config_portsecurity_enable_dhcpsnooping %}
+        dhcp-service {
+            dhcp-snooping-file {
+                /var/tmp/dhcpsnooping.log;
+                write-interval 60;
+            }
+        }
+{% endif %}
+    }
+}
+chassis {
+    redundancy {
+        graceful-switchover;
+    }
+{% if ex_config_laggs|length > 0 %}
+    aggregated-devices {
+        ethernet {
+            device-count {{ ex_config_laggs|length }};
+        }
+    }
+{% endif %}
+    alarm {
+        management-ethernet {
+            link-down ignore;
+        }
+    }
+{% if group_names | intersect(['juniper_ex4300']) %}
+    lcd-menu {
+        fpc 0 {
+            menu-item {
+                status-menu disable;
+                maintenance-menu disable;
+            }
+        }
+    }
+{% endif %}
+{# ports speed only for EX4650 #}
+{% if group_names | intersect(['juniper_ex4650']) %}
+{%   set netifs=ex_config_interfaces | selectattr('speed', 'defined') | list %}
+{%   if netifs | length > 0 %}
+{%     set fpcs = dict() %}
+{%     for interface in netifs %}
+{%       set s = interface.name | regex_search('^[a-z]+-([0-9]+)/([0-9]+)/([0-9]+)$', '\\1', '\\2', '\\3') %}
+{#       s[0] = #fpc ; s[1] = #pic ; s[2] = #port #}
+{%       if s[0] not in fpcs %}
+{%         set _dummy = fpcs.update({s[0]: dict()}) %}
+{%       endif %}
+{%       if s[1] not in fpcs[s[0]] %}
+{%         set _dummy = fpcs[s[0]].update({s[1]: dict()}) %}
+{%       endif %}
+{%       set _dummy = fpcs[s[0]][s[1]].update({s[2]: interface.speed}) %}
+{%     endfor %}
+{%     for fpc, pics in fpcs.items() %}
+    fpc {{ fpc }} {
+{%       for pic, ports in pics.items() %}
+        pic {{ pic }} {
+{%         for port, speed in ports.items() %}
+            port {{ port }} {
+                speed {{ speed }};
+            }
+{%         endfor %}
+        }
+{%       endfor %}
+    }
+{%     endfor %}
+{%   endif %}
+{% endif %}
+}
+{# /ports speed only for EX4650 #}
+interfaces {
+{# Physical interfaces #}
+{% for interface in ex_config_interfaces if not interface.used_by_lagg_or_vcport|default(false) %}
+    {{ interface.name }} {
+    {% if ex_config_enable_netmagis_descriptions %}
+        description "{{ interface.description ~ ' ' if interface.description is defined and interface.description != None else '' }}{{ '<L' ~ interface.linknumber ~ '>' if interface.linknumber is defined else '<X>' }}";
+    {% else %}
+        description "{{ interface.description if interface.description is defined and interface.description != None else '' }}";
+    {% endif %}
+    {% if interface.disabled|default(false) %}
+        disable;
+    {% endif %}
+    {# LAGG member #}
+    {% if interface.portmirroring is not defined and interface.member_of_lagg is defined %}
+        ether-options {
+            802.3ad {
+                {{ interface.member_of_lagg }};
+        {% if interface.lagg_link_protection is defined %}
+                {{ interface.lagg_link_protection }};
+        {% endif %}
+            }
+        }
+    {% else %}
+    {# Classical interface (non lagg) #}
+        {# Port-mirroring #}
+        {% if interface.portmirroring is defined %}
+        unit 0 {
+            family ethernet-switching;
+        }
+        {% else %}
+            {# Jumbo frames #}
+            {% set jumbo = namespace(found=false) %}
+            {% for vlan in ex_config_vlans if vlan.jumboframes|default(false) %}
+                {% for ifvlan in interface.vlans|default([]) if vlan.name == ifvlan or ifvlan == "all" %}
+                    {% if not jumbo.found %}
+                        {% set jumbo.found = true %}
+        mtu 9216; # Jumbo frames
+                    {% endif %}
+                {% endfor %}
+            {% endfor %}
+            {# VLANs #}
+            {% if interface.trunk|default(false) and interface.native_vlan is defined %}
+                {% for vlan in ex_config_vlans if vlan.name == interface.native_vlan %}
+        native-vlan-id {{ vlan.vlanid }};
+                {% endfor %}
+            {% endif %}
+        unit 0 {
+            family ethernet-switching {
+            {% if interface.trunk|default(false) %}
+                interface-mode trunk;
+            {% else %}
+                interface-mode access;
+            {% endif %}
+            {% if (interface.vlans|default([]) + [interface.native_vlan|default([])]|flatten)|default([])|length > 0 %}
+                vlan {
+                {% if (interface.vlans|default([]) + [interface.native_vlan|default([])]|flatten)|length == 1 %}
+                    members {{ (interface.vlans|default([]) + [interface.native_vlan|default([])]|flatten).0 }};
+                {% else %}
+                    members [ {{ (interface.vlans|default([]) + [interface.native_vlan|default([])]|flatten)|join(' ') }} ];
+                {% endif %}
+                }
+            {% endif %}
+            {# Storm control #}
+            {% if ex_config_enable_stormcontrol and not interface.stormtrusted|default(ex_config_stormtrusted_default) %}
+                storm-control sc-untrusted-interfaces;
+                recovery-timeout {{ ex_config_stormcontrol_disable_timeout }};
+            {% endif %}
+            }
+        }
+        {% endif %}
+    {% endif %}
+    }
+{% endfor %}
+{# LAGG interfaces #}
+{% for interface in ex_config_laggs if not interface.used_by_lagg_or_vcport|default(false) %}
+    {{ interface.name }} {
+    {% if ex_config_enable_netmagis_descriptions %}
+        description "{{ interface.description ~ ' ' if interface.description is defined and interface.description != None else '' }}{{ '<L' ~ interface.linknumber ~ '>' if interface.linknumber is defined else '<X>' }}";
+    {% else %}
+        description "{{ interface.description if interface.description is defined and interface.description != None else '' }};
+    {% endif %}
+    {% if interface.disabled|default(false) %}
+        disable;
+    {% endif %}
+        aggregated-ether-options {
+            link-speed {{ interface.speed }};
+    {% if interface.name in _ex_config_available_link_protection_laggs %}
+        {# Active/passive LAGG without LACP #}
+            link-protection {
+                revertive;
+                backup-state down;
+            }
+    {% else %}
+        {# Active LAGG with LACP #}
+            lacp {
+                active;
+                periodic {{ interface.periodic | default('slow') }};
+            }
+    {% endif %}
+        }
+        {# Jumbo frames #}
+        {% set jumbo = namespace(found=false) %}
+        {% for vlan in ex_config_vlans if vlan.jumboframes|default(false) %}
+            {% for ifvlan in interface.vlans|default([]) if vlan.name == ifvlan or ifvlan == "all" %}
+                {% if not jumbo.found %}
+                    {% set jumbo.found = true %}
+        mtu 9216; # Jumbo frames
+                {% endif %}
+            {% endfor %}
+        {% endfor %}
+        {# VLANs #}
+            {% if interface.trunk|default(false) and interface.native_vlan is defined %}
+                {% for vlan in ex_config_vlans if vlan.name == interface.native_vlan %}
+        native-vlan-id {{ vlan.vlanid }};
+                {% endfor %}
+            {% endif %}
+        unit 0 {
+            family ethernet-switching {
+        {% if interface.trunk|default(false) %}
+                interface-mode trunk;
+        {% else %}
+                interface-mode access;
+        {% endif %}
+        {% if (interface.vlans|default([]) + [interface.native_vlan|default([])]|flatten)|length > 0 %}
+                vlan {
+            {% if (interface.vlans|default([]) + [interface.native_vlan|default([])]|flatten)|length == 1 %}
+                    members {{ (interface.vlans|default([]) + [interface.native_vlan|default([])]|flatten).0 }};
+            {% else %}
+                    members [ {{ (interface.vlans|default([]) + [interface.native_vlan|default([])]|flatten)|join(' ') }} ];
+            {% endif %}
+                }
+        {% endif %}
+        {# Storm control #}
+        {% if ex_config_enable_stormcontrol and not interface.stormtrusted|default(ex_config_stormtrusted_default) %}
+                storm-control sc-untrusted-interfaces;
+                recovery-timeout {{ ex_config_stormcontrol_disable_timeout }};
+        {% endif %}
+            }
+        }
+    }
+{% endfor %}
+{# Management VLAN and IP #}
+{% for vlan in ex_config_vlans if vlan.name == ex_config_mgmtvlan %}
+    irb {
+        description "Routing interface <X>";
+        unit {{ vlan.vlanid }} { # Management IP is on VLAN {{ vlan.name }} ({{ vlan.vlanid }})
+            family inet {
+                # Enforce ex_config_firewall_denied_ips
+                filter {
+                    input denied_hosts;
+                }
+                address {{ ex_config_ipaddress }}/{{ (ex_config_ipaddress + '/' + ex_config_netmask) | ansible.utils.ipaddr('prefix') }};
+            }
+        }
+    }
+{% endfor %}
+}
+{# SNMP #}
+{% if ex_config_snmpcommunities|length > 0 or ex_config_snmptrapgroups|length > 0%}
+snmp {
+    name {{ ex_config_hostname }};
+{%   if ex_config_enable_netmagis_descriptions %}
+    location "{{ ex_config_location }} <P>";
+{%   else %}
+    location "{{ ex_config_location }}";
+{%   endif %}
+{%   for snmpcommunity in ex_config_snmpcommunities %}
+    community {{ snmpcommunity.name }} {
+        authorization read-only;
+{%     if snmpcommunity.clients|default([])|length > 0 %}
+        clients {
+{%       for snmpclient in snmpcommunity.clients %}
+            {{ snmpclient.ip }}/{{ (snmpclient.ip + '/' + snmpclient.netmask) | ansible.utils.ipaddr('prefix') }}; # {{ snmpclient.comment }}
+{%       endfor %}
+{%     endif %}
+        }
+    }
+{%   endfor %}
+{%   if ex_config_snmptrapgroups|length > 0 %}
+    trap-options {
+        source-address {{ ex_config_ipaddress }};
+    }
+{%     for trapgroup in ex_config_snmptrapgroups %}
+    trap-group {{ trapgroup.name }} {
+{%       if trapgroup.categories|default([])|length > 0 %}
+        categories {
+{%         for category in trapgroup.categories %}
+            {{ category }};
+{%         endfor %}
+        }
+{%       endif %}
+        targets {
+{%       for snmptarget in trapgroup.targets %}
+            {{ snmptarget.ip }}; # {{ snmptarget.comment }}
+{%       endfor %}
+        }
+    }
+{%     endfor %}
+{%   endif %}
+}
+{% endif %}
+{% if ex_config_enable_stormcontrol %}
+event-options {
+    policy STORM_CTL {
+        events ESWD_ST_CTL_ERROR_IN_EFFECT;
+        then {
+            raise-trap;
+        }
+    }
+}
+{% endif %}
+routing-options {
+    nonstop-routing;
+{% if ex_config_gateway is defined %}
+    static {
+        route 0.0.0.0/0 next-hop {{ ex_config_gateway }};
+    }
+{% endif %}
+}
+protocols {
+{% if group_names | intersect(['juniper_ex4600', 'juniper_ex4650']) %}
+    dcbx {
+        disable;
+    }
+{% endif %}
+{# 802.1X #}
+{% if ex_config_radiusservers|length > 0 %}
+    dot1x {
+        traceoptions {
+            file dotx size 10m files 2;
+            {# flag vlan;
+            flag state;
+            flag eapol;
+            flag dot1x-debug; #}
+        }
+        authenticator {
+            authentication-profile-name rad8021x;
+            interface {
+    {% for interface in ex_config_interfaces + ex_config_laggs if (interface.dot1x is defined) %}
+                {{ interface.name }} {
+        {% if interface.dot1x in ['both'] %}
+                    authentication-order [mac-radius dot1x]
+        {% endif %}
+        {% if (interface.is_uplink|default(false) or interface.maxhosts|default(ex_config_defaultmaxhosts|default(2))) > 1 or interface.toip|default(false) %}
+                    supplicant multiple;
+        {% else %}
+                    supplicant single-secure;
+        {% endif %}
+                    {# guest-vlan etudiants; # VLAN to which an interface is moved when no 802.1X supplicants are connected on the interface #}
+                    {# server-reject-vlan etudiants; # specify that when the switch receives an Extensible Authentication Protocol Over LAN (EAPoL) Access-Reject message during the authentication process between the switch and the RADIUS authentication server, supplicants attempting access to the LAN are granted access and moved to a specific VLAN #}
+        {# {% if interface.toip|default(false) %}
+                    lldp-med-bypass;  # Doesn't exist anymore on ELS
+        {% endif %} #}
+                    server-fail use-cache;
+        {% if interface.dot1x in ['macradius', 'both'] %}
+                    mac-radius {
+            {% if interface.dot1x in ['macradius'] %}
+                        restrict;
+            {% endif %}
+                        flap-on-disconnect;
+                    }
+        {% endif %}
+                    {# reauthentication 3600; #}
+                }
+    {% endfor %}
+            }
+        }
+    }
+{% endif %}
+    igmp-snooping {
+        vlan all {
+            immediate-leave;
+{% if 'all' in ex_config_igmpquerier %}
+            l2-querier {
+                source-address {{ ex_config_igmpquerier.all | default(ex_config_ipaddress, true) }};
+            }
+{% endif %}
+        }
+{% for vlan, address in ex_config_igmpquerier.items() if vlan != 'all' %}
+        vlan {{ vlan}} {
+            immediate-leave;
+            l2-querier {
+                source-address {{ address | default(ex_config_ipaddress, true) }};
+            }
+        }
+{% endfor %}
+    }
+    mld-snooping {
+        vlan all {
+            immediate-leave;
+{% if ex_config_mldquerier.all | default(false, true) %}
+            l2-querier {
+                source-address {{ ex_config_mldquerier.all }};
+            }
+{% endif %}
+        }
+{% for vlan, address in ex_config_mldquerier.items() if vlan != 'all' %}
+        vlan {{ vlan}} {
+            immediate-leave;
+            l2-querier {
+                source-address {{ address }};
+            }
+        }
+{% endfor %}
+    }
+    layer2-control {
+        nonstop-bridging;
+{# Filter BPDU on trusted interfaces #}
+{% set bpdufiltered = [] %}
+{% for interface in ex_config_interfaces + ex_config_laggs if interface.bpdu_block|default(ex_config_bpdu_block_default) and interface.stp_link_cost is not defined and not interface.used_by_lagg_or_vcport|default(false) and interface.member_of_lagg is not defined and interface.portmirroring is not defined %}
+    {{- bpdufiltered.append(interface) -}}
+{% endfor %}
+{% if bpdufiltered|length > 0 %}
+        bpdu-block {
+    {% for interface in bpdufiltered %}
+            interface {{ interface.name }} {{ '{ # ' ~ interface.description if interface.description is defined and interface.description != None else '{' }}
+                drop;
+            }
+    {% endfor %}
+        }
+{% endif %}
+    }
+    {# RSTP #}
+{% if ex_config_stp.protocol|default("None") == "rstp" %}
+    rstp {
+        bridge-priority {{ ex_config_stp_bridge_priority|default(ex_config_stp_default_bridge_priority) }};
+        traceoptions {
+            file rstp-log;
+            flag all-failures;
+            flag topology-change-state-machine;
+        }
+    {% for interface in ex_config_interfaces + ex_config_laggs if not interface.used_by_lagg_or_vcport|default(false) and interface.member_of_lagg is not defined and interface.portmirroring is not defined %}
+        {% set currentif = namespace(opts=[]) %}
+        {% if interface.rtg is defined %}
+            {{- currentif.opts.append("disable;") -}}
+        {% else %}
+            {% if not interface.is_uplink|default(false) %}
+                {{- currentif.opts.append("edge;") -}}
+                {{- currentif.opts.append("cost " ~ interface.stp_link_cost|default(ex_config_stp_default_edge_link_cost) ~ ";") -}}
+                {% if ex_config_enable_rootprotection %}
+                    {{- currentif.opts.append("no-root-port;") -}}
+                {% endif %}
+            {% elif interface.stp_link_cost is defined %}
+                {{- currentif.opts.append("cost " ~ interface.stp_link_cost ~ ";") -}}
+            {% endif %}
+            {% if interface.disable_stp|default(false) %}
+                {{- currentif.opts.append("disable;") -}}
+            {% endif %}
+        {% endif %}
+        {% if currentif.opts|length > 0 %}
+        interface {{ interface.name }} {{ '{ # ' ~ interface.description if interface.description is defined and interface.description != None else '{' }}
+            {% for opt in currentif.opts %}
+            {{ opt }}
+            {% endfor %}
+        }
+        {% else %}
+        interface {{ interface.name }}; {{ ' # ' ~ interface.description if interface.description is defined and interface.description != None else '' }}
+        {% endif %}
+    {% endfor %}
+    }
+{% endif %}
+    {# /RSTP #}
+    {# MSTP #}
+{% if ex_config_stp.protocol|default("None") == "mstp" %}
+    mstp {
+        configuration-name {{ ex_config_stp.mstp_settings.configname }};
+        revision-level {{ ex_config_stp.mstp_settings.revlevel }};
+        bridge-priority {{ ex_config_stp_bridge_priority|default(ex_config_stp_default_bridge_priority) }};
+        traceoptions {
+            file mstp-log;
+            flag all-failures;
+            flag topology-change-state-machine;
+        }
+    {% for interface in ex_config_interfaces + ex_config_laggs if not interface.used_by_lagg_or_vcport|default(false) and interface.member_of_lagg is not defined and interface.portmirroring is not defined %}
+        {% set currentif = namespace(opts=[]) %}
+        {% if interface.rtg is defined %}
+            {{- currentif.opts.append("disable;") -}}
+        {% else %}
+            {% if not interface.is_uplink|default(false) %}
+                {{- currentif.opts.append("edge;") -}}
+                {{- currentif.opts.append("cost " ~ interface.stp_link_cost|default(ex_config_stp_default_edge_link_cost) ~ ";") -}}
+                {% if ex_config_enable_rootprotection %}
+                    {{- currentif.opts.append("no-root-port;") -}}
+                {% endif %}
+            {% elif interface.stp_link_cost is defined %}
+                {{- currentif.opts.append("cost " ~ interface.stp_link_cost ~ ";") -}}
+            {% endif %}
+            {% if interface.disable_stp|default(false) %}
+                {{- currentif.opts.append("disable;") -}}
+            {% endif %}
+        {% endif %}
+        {% if currentif.opts|length > 0 %}
+        interface {{ interface.name }} {{ '{ # ' ~ interface.description if interface.description is defined and interface.description != None else '{' }}
+            {% for opt in currentif.opts %}
+            {{ opt }}
+            {% endfor %}
+        }
+        {% else %}
+        interface {{ interface.name }}; {{ ' # ' ~ interface.description if interface.description is defined and interface.description != None else '' }}
+        {% endif %}
+    {% endfor %}
+    {% for msti in ex_config_stp.mstp_settings.mstis|default([]) %}
+        msti {{ msti.id }} {
+            bridge-priority {{ ex_config_msti_bridge_priority[msti.id] | default(msti.bridge_priority) | default(ex_config_stp_default_bridge_priority) }};
+        {% set currentmsti = namespace(vlans=(ex_config_mstp_all_vlans | selectattr('name', 'in', msti.vlans | list ) | map(attribute='vlanid') | sort)) %}
+        {% if "-REMAINING-" in msti.vlans %}
+            {% set currentmsti.vlans = (currentmsti.vlans | union(_ex_config_mstp_unaffected_vlanids) | list | sort) %}
+        {% endif %}
+        {% if "-UNDEFINED-" in msti.vlans %}
+            {% set currentmsti.vlans = (currentmsti.vlans | union(_ex_config_mstp_undefined_vlanids) | list | sort) %}
+        {% endif %}
+            vlan [ {{ (currentmsti.vlans | vlan_parser(9999999)).0.split(',') | join(' ') }} ];
+        {% for interface in ex_config_interfaces + ex_config_laggs if (not interface.is_uplink|default(false) or interface.stp_link_cost is defined) and not interface.used_by_lagg_or_vcport|default(false) and interface.member_of_lagg is not defined and interface.portmirroring is not defined and interface.rtg is not defined %}
+            {% set currentif = namespace(opts=[]) %}
+            {% if interface.msti_link is defined and msti.id in interface.msti_link %}
+                {{- currentif.opts.append("cost " ~ interface.msti_link[msti.id] ~ ";") -}}
+            {% elif not interface.is_uplink|default(false) %}
+                {{- currentif.opts.append("cost " ~ interface.stp_link_cost|default(ex_config_stp_default_edge_link_cost) ~ ";") -}}
+            {% elif interface.stp_link_cost is defined %}
+                {{- currentif.opts.append("cost " ~ interface.stp_link_cost ~ ";") -}}
+            {% endif %}
+            {# Setup interface only if it has options AND at least a vlan in common with those of current msti #}
+            {% if currentif.opts|length > 0 
+               and currentmsti.vlans | intersect(ex_config_vlans | selectattr('name', 'in', interface.vlans ) | map(attribute='vlanid') | list) | length > 0
+            %}
+            interface {{ interface.name }} {{ '{ # ' ~ interface.description if interface.description is defined and interface.description != None else '{' }}
+                {% for opt in currentif.opts %}
+                {{ opt }}
+                {% endfor %}
+            }
+            {% endif %}
+        {% endfor %}
+        }
+    {% endfor %}
+    }
+{% endif %}
+    {# /MSTP #}
+    {# LLDP / LLDP-MED #}
+    lldp {
+        disable;
+        interface all;
+    }
+    lldp-med {
+{% for interface in ex_config_interfaces if interface.toip|default(false) %}
+        interface {{ interface.name }};{{ ' # ' ~ interface.description if interface.description is defined and interface.description != None else '' }}
+{% else %}
+        interface all disable;
+{% endfor %}
+    }
+}
+{# Firewall #}
+firewall {
+    family inet {
+        filter denied_hosts {
+{% if ex_config_firewall_denied_ips|length > 0 %}
+            term access_denied {
+                from {
+                    source-address {
+    {% for denied_ip in ex_config_firewall_denied_ips %}
+                        {{ denied_ip.ip }}/{{ (denied_ip.ip + '/' + denied_ip.netmask) | ansible.utils.ipaddr('prefix') }}; # {{ denied_ip.comment }}
+    {% endfor %}
+                    }
+                }
+                then {
+                    reject;
+                }
+            }
+{% endif %}
+            term default-term {
+                then accept;
+            }
+        }
+    }
+}
+{# Radius / 802.1X #}
+{% if ex_config_radiusservers|length > 0 %}
+access {
+    radius-server {
+    {% for radius in ex_config_radiusservers %}
+        {{  radius.ip }} {
+            port {{  radius.port|default(1812) }};
+            secret "{{ radius.password }}";
+        }
+    {% endfor %}
+    }
+    profile rad8021x {
+        authentication-order radius;
+        radius {
+    {% for radius in ex_config_radiusservers %}
+            authentication-server {{  radius.ip }};
+    {% endfor %}
+        }
+    }
+}
+{% endif %}
+switch-options {
+{# RTG #}
+{% if _ex_config_available_rtgs|count > 0 %}
+    redundant-trunk-group {
+{%   for rtg in _ex_config_available_rtgs %}
+    {%- set primary = (ex_config_interfaces | selectattr('rtg', 'defined') | selectattr('rtg.name', 'eq', rtg) | selectattr('rtg.primary', 'defined') | list)[0] -%}
+    {%- set secondary = (ex_config_interfaces | selectattr('rtg', 'defined') | selectattr('rtg.name', 'eq', rtg) | selectattr('rtg.secondary', 'defined') | list)[0] %}
+        group {{ rtg }} {
+{%     if primary.rtg.wait_before_restore is defined %}
+            preempt-cutover-timer {{ primary.rtg.wait_before_restore }};
+{%     endif %}
+            interface {{ primary.name }} {
+                primary;
+            }
+            interface {{ secondary.name }};
+        }
+{%   endfor %}
+    }
+{% endif %}
+{# VoIP / ToIP#}
+{% set voip = namespace(interfaces=[]) %}
+{% for interface in ex_config_interfaces + ex_config_laggs if not interface.used_by_lagg_or_vcport|default(false) and interface.toip|default(false) and interface.member_of_lagg is not defined and interface.portmirroring is not defined %}
+    {{- voip.interfaces.append(interface) -}}
+{% endfor %}
+{% if ex_config_toip_vlan is defined and voip.interfaces|length > 0 %}
+    voip {
+    {% for interface in voip.interfaces %}
+        interface {{ interface.name }} {{ '{ # ' ~ interface.description if interface.description is defined and interface.description != None else '{' }}
+            vlan {{ ex_config_toip_vlan }};
+        }
+    {% endfor %}
+    }
+{% endif %}
+{# mac-limit #}
+{% for interface in ex_config_interfaces + ex_config_laggs if not interface.is_uplink|default(false) and not interface.no_maxhosts|default(false) and not interface.used_by_lagg_or_vcport|default(false) and interface.member_of_lagg is not defined and not interface.disabled|default(false) and not interface.trunk|default(false) and (interface.maxhosts is defined or ex_config_defaultmaxhosts is defined) %}
+    interface {{ interface.name }} {
+        interface-mac-limit {
+    {% if interface.toip|default(false) %}
+            {{ (interface.maxhosts|default(ex_config_defaultmaxhosts) + 1)|string }}
+    {% else %}
+            {{ interface.maxhosts|default(ex_config_defaultmaxhosts)|string }}
+    {% endif %}
+            packet-action drop;
+        }
+    }
+{% endfor %}
+}
+{# Virtual-chassis #}
+{% if ex_config_virtual_chassis|length > 0 %}
+virtual-chassis {
+    preprovisioned;
+    no-split-detection;
+    {% for vcmember in ex_config_virtual_chassis %}
+    member {{ vcmember.memberid }} {
+        role routing-engine;
+        serial-number {{ vcmember.serial }};
+    }
+    {% endfor %}
+    vcp-no-hold-time;
+}
+{% endif %}
+{% if (ex_config_interfaces | selectattr('portmirroring', 'defined') | list | length) > 0 or ex_config_enable_stormcontrol %}
+forwarding-options {
+{# Port-mirroring #}
+{%   if (ex_config_interfaces | selectattr('portmirroring', 'defined') | list | length) > 0 %}
+    analyzer {
+{%     for interface in (ex_config_interfaces | selectattr('portmirroring', 'defined') | list) %}
+        {{ interface.portmirroring.name }} {
+            input {
+                ingress {
+{%       for srcif in interface.portmirroring.from %}
+                    interface {{ srcif }};
+{%       endfor %}
+                }
+                egress {
+{%       for srcif in interface.portmirroring.from %}
+                    interface {{ srcif }};
+{%       endfor %}
+                }
+            }
+            output {
+                interface {{ interface.name }};
+            }
+        }
+{%     endfor %}
+    }
+{%   endif %}
+{# Storm control #}
+{%   if ex_config_enable_stormcontrol %}
+    storm-control-profiles sc-untrusted-interfaces {
+        all {
+            bandwidth-level {{ ex_config_stormcontrol_bandwidthlevel }};
+{%     if not ex_config_stormcontrol_monitor_broadcast %}
+            no-broadcast;
+{%     endif %}
+{%     if not ex_config_stormcontrol_monitor_unknown_unicast %}
+            no-unknown-unicast;
+{%     endif %}
+{%     if not ex_config_stormcontrol_monitor_multicast %}
+            no-multicast;
+{%     endif %}
+{%     if not ex_config_stormcontrol_monitor_registered_multicast %}
+            no-registered-multicast;
+{%     endif %}
+{%     if not ex_config_stormcontrol_monitor_unregistered_multicast %}
+            no-unregistered-multicast;
+{%     endif %}
+        }
+{%     if ex_config_stormcontrol_shutdown %}
+        action-shutdown;
+{%     endif %}
+    }
+{%   endif %}
+}
+{% endif %}
+{# VLANs #}
+vlans {
+{% for vlan in ex_config_vlans %}
+    {{ vlan.name }} {
+        description "{{ vlan.description }}";
+        vlan-id {{ vlan.vlanid }};
+    {% if vlan.name == ex_config_mgmtvlan %}
+        l3-interface irb.{{ vlan.vlanid }};
+    {% endif %}
+    {# Port-security #}
+    {% if ex_config_portsecurity_enable_dhcpsnooping %}
+        {% if vlan.dhcpsnooping|default(true) %}
+        forwarding-options {
+            dhcp-security {
+            {% if ex_config_portsecurity_enable_dynamic_arp_inspection %}
+                arp-inspection;
+            {% endif %}
+            {% if ex_config_portsecurity_enable_ip_source_guard %}
+                ip-source-guard;
+            {% endif %}
+            {# Static ip/mac bindings #}
+            {% set macstatic = [] %}
+            {% for interface in ex_config_interfaces + ex_config_laggs if not interface.used_by_lagg_or_vcport|default(false) and interface.member_of_lagg is not defined and not interface.disabled|default(false) and interface.macstatic is defined and vlan.name in interface.macstatic %}
+                {{- macstatic.append(interface) -}}
+            {% endfor %}
+            {% if macstatic|length > 0 %}
+                group mac-static {
+                    {% for interface in macstatic %}
+                    interface {{ interface.name }} {
+                        {% for ip, mac in interface.macstatic[vlan.name].items() %}
+                        static-ip {{ ip }} mac {{ mac|lower }};
+                        {% endfor %}
+                    }
+                    {% endfor %}
+                }
+            {% endif %}
+            {# Port-security interfaces trust settings #}
+            {% set untrusted = [] %}
+            {% set trusted = [] %}
+            {% for interface in ex_config_interfaces + ex_config_laggs if ("all" in interface.vlans|default([]) or vlan.name in interface.vlans|default([])) and not interface.used_by_lagg_or_vcport|default(false) and interface.member_of_lagg is not defined and not interface.disabled|default(false) %}
+                {% if not interface.trunk|default(false) and interface.dhcptrusted|default(ex_config_dhcptrusted_default|default(false)) %}
+                    {{- trusted.append(interface) -}}
+                {% endif %}
+                {% if interface.trunk|default(false) and not interface.dhcptrusted|default(ex_config_dhcptrusted_default|default(true)) %}
+                    {{- untrusted.append(interface) -}}
+                {% endif %}
+            {% endfor %}
+            {% if trusted|length > 0 %}
+                group dhcp-trusted {
+                    overrides trusted;
+                {% for interface in trusted %}
+                    interface {{ interface.name }};
+                {% endfor %}
+                }
+            {% endif %}
+            {% if untrusted|length > 0 %}
+                group no-dhcp-trusted {
+                    overrides untrusted;
+                {% for interface in untrusted %}
+                    interface {{ interface.name }};
+                {% endfor %}
+                }
+            {% endif %}
+            }
+        }
+        {% endif %}
+    {% endif %}
+    }
+{% endfor %}
+}
+{% if ex_config_poeenabled %}
+poe {
+    interface all;
+    {% for interface in ex_config_interfaces %}
+        {% if not ( interface.poe|default(false) or interface.toip|default(false) ) %}
+    interface {{ interface.name }} {
+        disable;
+    }
+        {% endif %}
+    {% endfor %}
+}
+{% endif %}

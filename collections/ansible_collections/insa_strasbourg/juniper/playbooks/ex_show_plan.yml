@@ -1,0 +1,34 @@
+---
+
+# ansible-juniper-collection: Ansible collection to configure and deploy firmware on
+# Juniper EX switches
+# Copyright (C) 2022-2025 INSA Strasbourg
+#
+# This file is part of ansible-juniper-collection.
+#
+# ansible-juniper-collection is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# ansible-juniper-collection is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with ansible-juniper-collection. If not, see <https://www.gnu.org/licenses/>.
+
+- name: Juniper_ex_show_plan
+  hosts: "{{ target | default('all') }}"
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Get any planned shutdown/reboot
+      juniper.device.command:
+        commands: show system reboot
+      register: res
+
+    - name: Show any planned shutdown/reboot
+      ansible.builtin.debug:
+        msg: "{{ res.stdout_lines[3] }}"

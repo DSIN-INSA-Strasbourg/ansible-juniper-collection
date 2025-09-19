@@ -1,0 +1,37 @@
+---
+
+# ansible-juniper-collection: Ansible collection to configure and deploy firmware on
+# Juniper EX switches
+# Copyright (C) 2020-2025 INSA Strasbourg
+#
+# This file is part of ansible-juniper-collection.
+#
+# ansible-juniper-collection is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# ansible-juniper-collection is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with ansible-juniper-collection. If not, see <https://www.gnu.org/licenses/>.
+
+# Base URL of web server where the firmware will be downloaded by te Juniper devices
+ex_firmware_baseurl: "https://www.example.com/PLEASE/SET/ME"
+
+# By default, we'll try to validate current configuration.
+# But some recent devices doesn't support this option anymore (validation is a default), so for those this var should be overriden to no
+ex_firmware_validate: true
+
+# May be "text" or "json"
+ex_firmware_snapshot_version_format: "text"
+
+# Default to tomorrow at 01h00 (AM).
+# The value may be specified in one of the following ways:
+#   - "now" : The reboot takes effect immediately.
+#   - "+minutes" : The reboot takes effect in minutes minutes from now.
+#   - "yymmddhhmm" : The reboot takes effect at yymmddhhmm absolute time, specified as year, month, day, hour, and minute.
+ex_firmware_reboot_at: "{{ '%y%m%d0100' | strftime(ansible_date_time.epoch | int + 86400) }}"

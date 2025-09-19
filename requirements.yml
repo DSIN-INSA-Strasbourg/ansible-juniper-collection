@@ -1,0 +1,22 @@
+---
+# Avant d'ajouter une collection dans ce fichier, vérifier qu'elle ne soit pas déjà installée avec Ansible
+# avec la commande "ansible-galaxy collection list"
+collections:
+  - name: juniper.device
+    version: "1.0.7"
+
+  # # Installed with ansible
+  # - name: junipernetworks.junos
+  #   version: ">=11.0.0"
+
+  # # Installed with ansible
+  # # Required by junipernetworks.junos
+  # - name: ansible.netcommon
+  #   version: ">=8.1.0"
+
+  # # Installed with ansible
+  # # Provide 'ansible.utils.ipaddr' filter used in
+  # # - insa_strasbourg.juniper/roles/ex_config/templates/juniper.conf.j2
+  # # - insa_strasbourg.juniper/roles/ex_config/templates/juniper-els.conf.j2
+  # - name: ansible.utils
+  #   version: ">=6.0.0"

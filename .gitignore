@@ -1,0 +1,7 @@
+*.retry
+/.ansible/
+/.venv*
+/.vscode/
+/local
+__pycache__/
+*.pyc

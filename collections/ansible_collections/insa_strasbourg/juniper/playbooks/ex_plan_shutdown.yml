@@ -1,0 +1,47 @@
+---
+
+# ansible-juniper-collection: Ansible collection to configure and deploy firmware on
+# Juniper EX switches
+# Copyright (C) 2021-2025 INSA Strasbourg
+#
+# This file is part of ansible-juniper-collection.
+#
+# ansible-juniper-collection is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# ansible-juniper-collection is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with ansible-juniper-collection. If not, see <https://www.gnu.org/licenses/>.
+
+- name: Juniper_ex_plan_shutdown
+  hosts: "{{ target | default('all') }}"
+  connection: local
+  gather_facts: false
+  vars_prompt:
+    - name: shutdown_when
+      prompt: |
+        When do you want JUNIPER devices to shutdown ?
+        Possible formats are :
+          - 'yymmddhhmm' for specific datetime
+          - 'now' for as soon as possible
+          - 'cancel' to cancel any planned shutdown/reboot
+      private: false
+  tasks:
+    - name: Cancel any planned shutdown/reboot
+      juniper.device.command:
+        commands: clear system reboot
+      when: shutdown_when == 'cancel'
+      register: res
+      changed_when: "'No shutdown/reboot scheduled.' not in res.stdout_lines"
+
+    - name: Power off at specified time
+      juniper.device.system:
+        action: "shutdown"
+        at: "{{ shutdown_when }}"
+      when: shutdown_when != 'cancel'

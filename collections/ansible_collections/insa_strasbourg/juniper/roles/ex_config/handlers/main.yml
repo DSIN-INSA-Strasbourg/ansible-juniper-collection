@@ -1,0 +1,37 @@
+---
+
+# ansible-juniper-collection: Ansible collection to configure and deploy firmware on
+# Juniper EX switches
+# Copyright (C) 2019-2025 INSA Strasbourg
+#
+# This file is part of ansible-juniper-collection.
+#
+# ansible-juniper-collection is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# ansible-juniper-collection is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with ansible-juniper-collection. If not, see <https://www.gnu.org/licenses/>.
+
+- name: "Wait to let network troubles appears and ensure we kept access to device during (seconds) {{ ex_config_delay_between_commitconfirm_and_commit }}"
+  ansible.builtin.pause:
+    seconds: "{{ ex_config_delay_between_commitconfirm_and_commit }}"
+  listen: Commit confirmed changed running config
+
+
+- name: Confirm commit
+  junipernetworks.junos.junos_config:
+    confirm_commit: true
+  listen: Commit confirmed changed running config
+
+
+- name: Save rescue configuration
+  junipernetworks.junos.junos_command:
+    commands: request system configuration rescue save
+  listen: Commit confirmed changed running config

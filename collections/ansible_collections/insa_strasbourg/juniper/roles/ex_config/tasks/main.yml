@@ -1,0 +1,461 @@
+---
+
+# ansible-juniper-collection: Ansible collection to configure and deploy firmware on
+# Juniper EX switches
+# Copyright (C) 2019-2025 INSA Strasbourg
+#
+# This file is part of ansible-juniper-collection.
+#
+# ansible-juniper-collection is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# ansible-juniper-collection is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with ansible-juniper-collection. If not, see <https://www.gnu.org/licenses/>.
+
+- name: Collect default set of facts
+  junipernetworks.junos.junos_facts:
+    gather_subset: interfaces
+  when: "'offline' not in ansible_run_tags"
+  tags: always
+
+- name: Determine if device is ELS
+  delegate_to: localhost
+  ansible.builtin.set_fact:
+    _ex_config_is_els_device: "{{ 'juniper_els' in group_names }}"
+  tags: always
+
+- name: Apply trusted settings to trusted interfaces and laggs
+  ansible.builtin.set_fact:
+    ex_config_interfaces: "{{ ex_config_interfaces | insa_strasbourg.juniper.combine_trusted_settings(ex_config_trusted_settings) }}"
+    ex_config_laggs: "{{ ex_config_laggs | insa_strasbourg.juniper.combine_trusted_settings(ex_config_trusted_settings) }}"
+  tags: always
+
+- name: Register availables rtgs
+  delegate_to: localhost
+  ansible.builtin.set_fact:
+    _ex_config_available_rtgs: "{{ ex_config_interfaces | selectattr('rtg', 'defined') | map(attribute='rtg.name') | unique | sort | list }}"
+  tags: always
+
+- name: Register availables laggs
+  delegate_to: localhost
+  ansible.builtin.set_fact:
+    _ex_config_available_laggs: "{{ ex_config_laggs | map(attribute='name') | list }}"
+  tags: always
+
+- name: Register active/passive laggs (with link_protection)
+  delegate_to: localhost
+  ansible.builtin.set_fact:
+    _ex_config_available_link_protection_laggs: >-
+      {{ _ex_config_available_link_protection_laggs | default([]) +
+      (
+        ((ex_config_interfaces | rejectattr('lagg_link_protection', 'undefined') | selectattr('member_of_lagg', 'eq', item) | list | count) > 0)
+        | ternary([item], [])
+      ) }}
+  loop: "{{ _ex_config_available_laggs }}"
+  tags: always
+
+- name: Register availables vlans
+  delegate_to: localhost
+  ansible.builtin.set_fact:
+    _ex_config_available_vlans: "{{ ex_config_vlans | map(attribute='name') | list }}"
+  tags: always
+
+- name: Register availables configured interfaces names
+  delegate_to: localhost
+  ansible.builtin.set_fact:
+    _ex_config_configured_interface_names: "{{ ex_config_interfaces | map(attribute='name') | list }}"
+  tags: always
+
+
+- name: Ensure that ex_config_mgmtvlan is an existing vlan
+  delegate_to: localhost
+  ansible.builtin.fail:
+    msg: "Invalid ex_config_mgmtvlan specified"
+  when: ex_config_mgmtvlan|default("UNDEFINED VLAN") not in _ex_config_available_vlans
+
+
+- name: Ensure each rtg is set on exactly 2 interfaces
+  delegate_to: localhost
+  ansible.builtin.fail:
+    msg: >-
+      RTG '{{ item }}' is bound to
+      {{ ex_config_interfaces | selectattr('rtg', 'defined') | selectattr('rtg.name', 'eq', item) | list | count }}
+      interface(s) instead of two
+  when: >
+    (ex_config_interfaces | selectattr('rtg', 'defined') | selectattr('rtg.name', 'eq', item) | list | count) != 2
+  loop: "{{ _ex_config_available_rtgs }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Ensure each rtg have a primary and a secondary interface
+  delegate_to: localhost
+  ansible.builtin.fail:
+    msg: "RTG '{{ item }}' needs one primary and one secondary interface"
+  when: >
+    (ex_config_interfaces | selectattr('rtg', 'defined') | selectattr('rtg.name', 'eq', item) | selectattr('rtg.primary', 'defined') | list | count) != 1
+    or (ex_config_interfaces | selectattr('rtg', 'defined') | selectattr('rtg.name', 'eq', item) | selectattr('rtg.secondary', 'defined') | list | count) != 1
+  loop: "{{ _ex_config_available_rtgs }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Ensure specified member_of_lagg interfaces are set to a defined lagg
+  delegate_to: localhost
+  ansible.builtin.fail:
+    msg: "Interface '{{ item.name }}' is bound to an undefined lagg '{{ item.member_of_lagg }}'"
+  when: >
+    item.member_of_lagg is defined and
+    item.member_of_lagg not in _ex_config_available_laggs
+  loop: "{{ ex_config_interfaces }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Ensure active/passive laggs (with link_protection) have exacly one primary and one backup interface
+  delegate_to: localhost
+  ansible.builtin.fail:
+    msg: "Active/passive lagg '{{ item }}'' require exactly one primary and one backup interface and have to be bound to exactly 2 interfaces"
+  when: >
+    (ex_config_interfaces | rejectattr('member_of_lagg', 'undefined') | selectattr('member_of_lagg', 'eq', item) | list | count) != 2 or
+    (
+      ex_config_interfaces | rejectattr('lagg_link_protection', 'undefined')
+      | selectattr('member_of_lagg', 'eq', item) | selectattr('lagg_link_protection', 'eq', 'primary') | list | count
+    ) != 1 or
+    (
+      ex_config_interfaces | rejectattr('lagg_link_protection', 'undefined')
+      | selectattr('member_of_lagg', 'eq', item) | selectattr('lagg_link_protection', 'eq', 'backup') | list | count
+    ) != 1
+  loop: "{{ _ex_config_available_link_protection_laggs | default([]) }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Ensure specified periodic attribute of laggs is valid
+  delegate_to: localhost
+  ansible.builtin.fail:
+    msg: >-
+      Invalid 'periodic' value is specified for laggs
+      {{ ex_config_laggs | selectattr('periodic', 'defined') | rejectattr('periodic', 'in', ['fast', 'slow']) | map(attribute='name') | list }}.
+      Valid values are ['slow', 'fast']
+  when: >
+    (
+      ex_config_laggs
+      | selectattr('periodic', 'defined')
+      | rejectattr('periodic', 'in', ['fast', 'slow'])
+      | map(attribute='name') | list | count
+    ) > 0
+
+
+- name: Ensure no vlan is set to 'None'
+  delegate_to: localhost
+  ansible.builtin.fail:
+    msg: "Interface '{{ item.name }}' has a vlan set to None"
+  when: >
+    not item.used_by_lagg_or_vcport|default(false) and
+    not item.member_of_lagg|default(false) and
+    (
+      item.vlans|default([])|length > 0 and
+      None in item.vlans
+    )
+  loop: "{{ ex_config_interfaces }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+
+- name: Ensure each physical interface is configured
+  delegate_to: localhost
+  ansible.builtin.fail:
+    msg: "Interface '{{ item.key }}' is missing from configuration"
+  when: >
+    item.value.type == None and
+    not item.key.startswith('ae') and
+    not item.key.startswith('vcp') and
+    item.key not in _ex_config_configured_interface_names
+  loop: "{{ lookup('dict', ansible_facts.net_interfaces) }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+
+- name: Ensure each interface is set to at least one VLAN
+  delegate_to: localhost
+  ansible.builtin.fail:
+    msg: "Interface '{{ item.name }}' has no vlan set"
+  when: >
+    not item.used_by_lagg_or_vcport|default(false) and
+    not item.member_of_lagg|default(false) and
+    item.portmirroring is not defined and
+    item.vlans|default([])|length == 0 and
+    not item.toip |default(false) and
+    item.native_vlan is not defined
+  loop: "{{ ex_config_interfaces }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+
+- name: Ensure each vlan specified in each interfaces is an existing vlan
+  delegate_to: localhost
+  ansible.builtin.fail:
+    msg: "Interface '{{ item.0.name }}' has an invalid vlan '{{ item.1 }}' specified"
+  when: >
+    not item.0.used_by_lagg_or_vcport|default(false) and
+    not item.0.member_of_lagg|default(false) and
+    (
+      item.1 != "all" and
+      item.1 not in _ex_config_available_vlans
+    )
+  loop: "{{ ex_config_interfaces | subelements('vlans', skip_missing=true) }}"
+  loop_control:
+    label: "{{ item.0.name }}"
+
+
+- name: Ensure that if 'all' vlan is specified on interface, no other vlan is set on that interface
+  delegate_to: localhost
+  ansible.builtin.fail:
+    msg: "Interface '{{ item.name }}' has all vlan specified, and some more"
+  when: >
+    not item.used_by_lagg_or_vcport|default(false) and
+    not item.member_of_lagg|default(false) and
+    item.vlans|default([])|length > 1 and
+    'all' in item.vlans
+  loop: "{{ ex_config_interfaces }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+
+- name: Ensure that no vlan is set more than once on each interface
+  delegate_to: localhost
+  ansible.builtin.fail:
+    msg: "Interface '{{ item.name }}' has at least a vlan specified more than once"
+  when: >
+    not item.used_by_lagg_or_vcport|default(false) and
+    not item.member_of_lagg|default(false) and
+    item.vlans|default([])|length > 0 and
+    item.vlans|length != item.vlans|unique|length
+  loop: "{{ ex_config_interfaces }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+
+- name: Ensure that only one vlan is set on access interface
+  delegate_to: localhost
+  ansible.builtin.fail:
+    msg: "Interface '{{ item.name }}' is set as access port, with several vlans"
+  when: >
+    not item.used_by_lagg_or_vcport|default(false) and
+    not item.member_of_lagg|default(false) and
+    item.portmirroring is not defined and
+    not item.trunk|default(false) and
+    (
+      (
+        not item.toip |default(false) and
+        item.vlans|default([])|length != 1
+      ) or
+      (
+        item.toip |default(false) and
+        item.vlans|default([])|length > 1
+      ) or
+      'all' in item.vlans
+    )
+  loop: "{{ ex_config_interfaces }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+
+- name: Ensure that native_vlan is set only on trunks
+  delegate_to: localhost
+  ansible.builtin.fail:
+    msg: "Interface '{{ item.name }}' has a native vlan set, but interface is set as access port"
+  when: >
+    not item.used_by_lagg_or_vcport|default(false) and
+    not item.member_of_lagg|default(false) and
+    not item.trunk|default(false) and
+    item.native_vlan is defined
+  loop: "{{ ex_config_interfaces }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+
+- name: Ensure that specified native_vlan is an existing vlan
+  delegate_to: localhost
+  ansible.builtin.fail:
+    msg: "Interface '{{ item.name }}' has an invalid native_vlan '{{ item.native_vlan }}' specified"
+  when: >
+    not item.used_by_lagg_or_vcport|default(false) and
+    not item.member_of_lagg|default(false) and
+    item.native_vlan is defined and
+    item.native_vlan not in _ex_config_available_vlans
+  loop: "{{ ex_config_interfaces }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+
+- name: Ensure that specified native_vlan is not in interface vlans (tagged)
+  delegate_to: localhost
+  ansible.builtin.fail:
+    msg: >-
+      Interface '{{ item.name }}' has a native_vlan '{{ item.native_vlan }}' specified.
+      This vlan must not be defined in interface vlans, otherwise it will be tagged
+  when: >
+    not item.used_by_lagg_or_vcport|default(false) and
+    not item.member_of_lagg|default(false) and
+    item.native_vlan is defined and
+    (
+      'all' in item.vlans or
+      item.native_vlan in item.vlans
+    )
+  loop: "{{ ex_config_interfaces }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+
+# MSTP
+- name: MSTP configuration check
+  when: ex_config_stp.protocol|default("None") == 'mstp'
+  block:
+
+    - name: MSTP - Register MSTIs vlan affectations
+      delegate_to: localhost
+      ansible.builtin.set_fact:
+        _ex_config_stp_affected_vlans: "{{ ex_config_stp.mstp_settings.mstis | selectattr('vlans', 'defined') | map(attribute='vlans') | list }}"
+      tags: always
+
+    - name: MSTP - Ensure each msti is set with a 'vlans' setting
+      delegate_to: localhost
+      ansible.builtin.fail:
+        msg: "MSTI cannot be set without a 'vlans' setting"
+      when: >
+        ex_config_stp.mstp_settings.mstis | selectattr('vlans', 'undefined') | map(attribute='vlans') | list | length > 0
+
+    - name: MSTP - Ensure that each msti has at least one vlan affected
+      delegate_to: localhost
+      ansible.builtin.fail:
+        msg: "MSTI cannot be set with an empty vlan list"
+      when: item | length == 0
+      loop: "{{ _ex_config_stp_affected_vlans }}"
+      loop_control:
+        extended: true
+        label: "{{ ansible_loop.index }}/{{ ansible_loop.length }}"
+
+    - name: MSTP - Ensure vlans are affected only once
+      delegate_to: localhost
+      ansible.builtin.fail:
+        msg: "Some vlan are affected more than one time in MSTIs"
+      when: _ex_config_stp_affected_vlans | flatten | length != _ex_config_stp_affected_vlans | flatten | unique | length
+
+    - name: MSTP - Register unknown vlans ID
+      delegate_to: localhost
+      ansible.builtin.set_fact:
+        _ex_config_mstp_undefined_vlanids: "{{ range(1, 4095) | difference(ex_config_mstp_all_vlans | map(attribute='vlanid')) | list | sort }}"
+      tags: always
+
+    - name: MSTP - Register unaffected vlans ID
+      delegate_to: localhost
+      ansible.builtin.set_fact:
+        _ex_config_mstp_unaffected_vlanids: >-
+          {{ (ex_config_mstp_all_vlans | map(attribute='vlanid') | list)
+              | difference(
+                  ex_config_mstp_all_vlans
+                  | selectattr('name', 'in', _ex_config_stp_affected_vlans | flatten | unique)
+                  | map(attribute='vlanid')
+                  | list
+              ) | list | sort
+          }}
+      tags: always
+# /MSTP
+
+# IGMP querier
+- name: IGMP querier configuration check
+  when: _ex_config_is_els_device and (ex_config_igmpquerier | length > 0)
+  block:
+    - name: IGMP querier - ensure all specified VLAN are existing vlans
+      delegate_to: localhost
+      ansible.builtin.fail:
+        msg: >-
+          Unknown vlans in 'ex_config_igmpquerier' :
+          {{ (ex_config_igmpquerier.keys() | difference(_ex_config_available_vlans | union(['all']))) }}
+      when: (ex_config_igmpquerier.keys() | difference(_ex_config_available_vlans | union(['all']))) | length > 0
+
+    - name: IGMP querier - ensure an IPv4 value is set for each specified VLAN
+      delegate_to: localhost
+      ansible.builtin.fail:
+        msg: >-
+          Invalid values in 'ex_config_igmpquerier', must be IPv4 addresses :
+          {{ ex_config_igmpquerier.values() | reject('none') | reject('ansible.utils.ipv4_address') | list }}
+      when: (ex_config_igmpquerier.values() | reject('none') | reject('ansible.utils.ipv4_address')) | length > 0
+# /IGMP querier
+
+# MLD querier
+- name: MLD querier configuration check
+  when: _ex_config_is_els_device and (ex_config_mldquerier | length > 0)
+  block:
+    - name: MLD querier - ensure all specified VLAN are existing vlans
+      delegate_to: localhost
+      ansible.builtin.fail:
+        msg: >-
+          Unknown vlans in 'ex_config_mldquerier' :
+          {{ (ex_config_mldquerier.keys() | difference(_ex_config_available_vlans | union(['all']))) }}
+      when: (ex_config_mldquerier.keys() | difference(_ex_config_available_vlans | union(['all']))) | length > 0
+
+    - name: MLD querier - ensure an IPv6 value is set for each specified VLAN
+      delegate_to: localhost
+      ansible.builtin.fail:
+        msg: >-
+          Invalid values in 'ex_config_mldquerier', must be IPv6 addresses :
+          {{ ex_config_mldquerier.values() | reject('ansible.utils.ipv6_address') | list }}
+      when: (ex_config_mldquerier.values() | reject('ansible.utils.ipv6_address')) | length > 0
+# /MLD querier
+
+- name: Ensure configs save dir exists
+  delegate_to: localhost
+  ansible.builtin.file:
+    path: "{{ ex_config_save_dir }}"
+    state: directory
+    mode: "0700"
+  tags: always
+
+
+- name: Save new configuration locally (non els)
+  delegate_to: localhost
+  ansible.builtin.template:
+    src: juniper.conf.j2
+    dest: "{{ ex_config_save_dir }}/{{ inventory_hostname }}.conf"
+    mode: "0644"
+  when: not _ex_config_is_els_device|bool
+  tags: always
+
+
+- name: Save new configuration locally (els)
+  delegate_to: localhost
+  ansible.builtin.template:
+    src: juniper-els.conf.j2
+    dest: "{{ ex_config_save_dir }}/{{ inventory_hostname }}.conf"
+    mode: "0644"
+  when: _ex_config_is_els_device|bool
+  tags: always
+
+
+- name: Send configuration to device, and commit check it
+  junipernetworks.junos.junos_config:
+    src: "{{ ex_config_save_dir }}/{{ inventory_hostname }}.conf"
+    update: override
+    check_commit: true
+  tags:
+    - never
+    - check
+
+
+- name: "Send configuration to device, and commit confirm it for (in minutes) : {{ ex_config_commitconfirm_delay }}"
+  junipernetworks.junos.junos_config:
+    src: "{{ ex_config_save_dir }}/{{ inventory_hostname }}.conf"
+    update: override
+    confirm: "{{ ex_config_commitconfirm_delay }}"
+  notify: Commit confirmed changed running config
+  tags: quick
+
+
+- name: Flush handlers
+  ansible.builtin.meta: flush_handlers

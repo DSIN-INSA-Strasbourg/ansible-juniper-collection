@@ -1,0 +1,7 @@
+---
+# .config/ansible-lint.yml
+skip_list:
+  - experimental
+  - yaml[empty-lines]
+
+offline: true
