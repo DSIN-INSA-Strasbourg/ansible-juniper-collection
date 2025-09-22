@@ -128,12 +128,6 @@ then
     exit 1
 fi
 
-if ! command -v "direnv" &> /dev/null
-then
-    echo "direnv was not found in \$PATH - abort" >&2
-    exit 1
-fi
-
 # Check if dependencies are installed, and install the missing ones
 needsapt=no
 for pkg in ${aptdeps}
@@ -150,6 +144,13 @@ then
     echo -e "*** Install dependencies ***\n"
     echo "sudo apt install ${aptdeps}"
     sudo apt update && sudo apt install ${aptdeps} --yes
+fi
+
+# Check for direnv command
+if ! command -v "direnv" &> /dev/null
+then
+    echo "direnv was not found in \$PATH - abort" >&2
+    exit 1
 fi
 
 
