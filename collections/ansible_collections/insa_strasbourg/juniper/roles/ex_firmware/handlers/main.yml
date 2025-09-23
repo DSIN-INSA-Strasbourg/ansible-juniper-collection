@@ -19,7 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with ansible-juniper-collection. If not, see <https://www.gnu.org/licenses/>.
 
-- name: Plan reboot during next night
+- name: "Plan reboot at {{ ex_firmware_reboot_at }}"
   juniper.device.system:
     action: reboot
     at: "{{ ex_firmware_reboot_at }}"
