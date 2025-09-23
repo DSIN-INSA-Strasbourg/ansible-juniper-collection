@@ -82,7 +82,7 @@
     validate: "{{ ex_firmware_validate }}"
     reboot: false
     version: "{{ ex_firmware_version | default(ex_firmware | regex_replace('^.*-(\\d{2}\\..*\\d).*$', '\\1')) }}"
-  notify: Plan reboot during next night
+  notify: Plan reboot
   register: _ex_firmware_version_was_updated
   when: not ansible_facts.junos.has_2RE
   tags: install_on_critical
