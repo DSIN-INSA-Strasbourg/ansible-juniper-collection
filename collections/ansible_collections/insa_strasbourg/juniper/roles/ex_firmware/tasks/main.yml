@@ -161,7 +161,7 @@
       changed_when: true
       when: >
         'check' not in ansible_run_tags and
-        oldversions|default([])|length > 0
+        _ex_firmware_version_oldversions|default([])|length > 0
       tags:
         - install_on_critical
         - install_on_virtual_chassis_only
