@@ -21,8 +21,10 @@
 
 - name: Juniper_ex_plan_shutdown
   hosts: "{{ target | default('all') }}"
-  connection: local
+  connection: juniper.device.pyez
   gather_facts: false
+  vars:
+    hostname: "{{ ex_config_hostname }}"
   vars_prompt:
     - name: shutdown_when
       prompt: |

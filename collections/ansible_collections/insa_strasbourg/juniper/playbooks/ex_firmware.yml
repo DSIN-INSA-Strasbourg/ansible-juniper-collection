@@ -21,7 +21,9 @@
 
 - name: Juniper_ex_firmware
   hosts: "{{ target | default('all') }}"
-  connection: local
+  connection: juniper.device.pyez
   gather_facts: false
+  vars:
+    hostname: "{{ ex_config_hostname }}"
   roles:
     - insa_strasbourg.juniper.ex_firmware

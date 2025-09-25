@@ -21,8 +21,10 @@
 
 - name: Juniper_ex_show_plan
   hosts: "{{ target | default('all') }}"
-  connection: local
+  connection: juniper.device.pyez
   gather_facts: false
+  vars:
+    hostname: "{{ ex_config_hostname }}"
   tasks:
     - name: Get any planned shutdown/reboot
       juniper.device.command:
