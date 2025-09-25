@@ -19,9 +19,24 @@
 # You should have received a copy of the GNU General Public License
 # along with ansible-juniper-collection. If not, see <https://www.gnu.org/licenses/>.
 
-- name: Collect default set of facts
-  junipernetworks.junos.junos_facts:
-    gather_subset: interfaces
+- name: Collect interfaces from device
+  juniper.device.rpc:
+    rpc: get-interface-information
+    kwargs:
+      brief: true
+    formats: xml
+  register: _ex_config_facts_interfaces_rpc
+  when: "'offline' not in ansible_run_tags"
+  tags: always
+
+- name: Only keep interface names from collected interfaces data
+  ansible.builtin.set_fact:
+    _ex_config_facts_interfaces: >
+      {{
+          _ex_config_facts_interfaces_rpc.parsed_output['interface-information']['physical-interface']
+          | selectattr('if-type', 'undefined')
+          | map(attribute='name')
+      }}
   when: "'offline' not in ansible_run_tags"
   tags: always
 
@@ -169,15 +184,12 @@
 - name: Ensure each physical interface is configured
   delegate_to: localhost
   ansible.builtin.fail:
-    msg: "Interface '{{ item.key }}' is missing from configuration"
+    msg: "Interface '{{ item }}' is missing from configuration"
   when: >
-    item.value.type == None and
-    not item.key.startswith('ae') and
-    not item.key.startswith('vcp') and
-    item.key not in _ex_config_configured_interface_names
-  loop: "{{ lookup('dict', ansible_facts.net_interfaces) }}"
-  loop_control:
-    label: "{{ item.key }}"
+    not item.startswith('ae') and
+    not item.startswith('vcp') and
+    item not in _ex_config_configured_interface_names
+  loop: "{{ _ex_config_facts_interfaces | default([]) }}"
 
 
 - name: Ensure each interface is set to at least one VLAN
@@ -439,20 +451,24 @@
 
 
 - name: Send configuration to device, and commit check it
-  junipernetworks.junos.junos_config:
+  juniper.device.config:
     src: "{{ ex_config_save_dir }}/{{ inventory_hostname }}.conf"
-    update: override
-    check_commit: true
+    load: update
+    check: true
+    config_mode: private
+    commit: false
+    ignore_warning: "{{ ex_config_ignore_commit_warnings }}"
   tags:
     - never
     - check
 
 
 - name: "Send configuration to device, and commit confirm it for (in minutes) : {{ ex_config_commitconfirm_delay }}"
-  junipernetworks.junos.junos_config:
+  juniper.device.config:
     src: "{{ ex_config_save_dir }}/{{ inventory_hostname }}.conf"
-    update: override
-    confirm: "{{ ex_config_commitconfirm_delay }}"
+    load: update
+    confirmed: "{{ ex_config_commitconfirm_delay }}"
+    ignore_warning: "{{ ex_config_ignore_commit_warnings }}"
   notify: Commit confirmed changed running config
   tags: quick
 

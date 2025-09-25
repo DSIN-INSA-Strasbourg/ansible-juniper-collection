@@ -119,3 +119,8 @@ ex_config_stp_default_edge_link_cost: "200000000"
 ex_config_virtual_chassis: []
 
 ex_config_enable_netmagis_descriptions: false
+
+# Commit fails when any warning is met, except for those specified here.
+# Note: you may use regex on any list item
+ex_config_ignore_commit_warnings:
+  - "mgd: [0-9]+g config will be applied to ports [0-9]+ to [0-9]+"  # Port speed on EX4650

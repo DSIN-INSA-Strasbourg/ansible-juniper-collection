@@ -21,7 +21,9 @@
 
 - name: Juniper_ex_config
   hosts: "{{ target | default('all') }}"
-  connection: ansible.netcommon.netconf
+  connection: juniper.device.pyez
   gather_facts: false
+  vars:
+    hostname: "{{ ex_config_hostname }}"
   roles:
     - insa_strasbourg.juniper.ex_config

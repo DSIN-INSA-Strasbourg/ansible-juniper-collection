@@ -26,12 +26,13 @@
 
 
 - name: Confirm commit
-  junipernetworks.junos.junos_config:
-    confirm_commit: true
+  juniper.device.config:
+    commit: true
   listen: Commit confirmed changed running config
 
 
 - name: Save rescue configuration
-  junipernetworks.junos.junos_command:
+  juniper.device.command:
     commands: request system configuration rescue save
+    format: xml
   listen: Commit confirmed changed running config

@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Major change in role `insa_strasbourg.ex_config`: collection [juniper.device](https://galaxy.ansible.com/ui/repo/published/juniper/device/) is now used in replacement of [junipernetworks.junos](https://docs.ansible.com/ansible/latest/collections/junipernetworks/junos/index.html)
+  This was motivated by 2 reasons:
+    1. Main one, the nasty [issue #535](https://github.com/ansible-collections/junipernetworks.junos/issues/535) was _randomly_ met on EX4650, leading to configuration changes not being deployed to devices, and Ansible erroneously reporting "no changes" to the device config
+    2. The whole collection is now only using the juniper.device collection. However, junipernetworks.junos and its requirements are kept to facilitate its eventual use
 - Bumped juniper.device to version 1.0.9, and added the installation of a patched to avoid [issue #775](https://github.com/Juniper/ansible-junos-stdlib/issues/775) until it is fixed
 
 ### Fixed
