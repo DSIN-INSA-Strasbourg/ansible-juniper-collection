@@ -39,7 +39,7 @@ tags:
 # L(specifiers,https://python-semanticversion.readthedocs.io/en/latest/#requirement-specification). Multiple version
 # range specifiers can be set and are separated by ','
 dependencies:
-  juniper.device: "1.0.7"
+  juniper.device: "1.0.9"
   junipernetworks.junos: ">=11.0.0"  # Installed with ansible
   ansible.netcommon: ">=8.1.0"  # Installed with ansible, required by junipernetworks.junos
   ansible.utils: ">=6.0.0"  # # Provide 'ansible.utils.ipaddr' filter used in templates

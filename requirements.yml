@@ -3,7 +3,7 @@
 # avec la commande "ansible-galaxy collection list"
 collections:
   - name: juniper.device
-    version: "1.0.7"
+    version: "1.0.9"
 
   # # Installed with ansible
   # - name: junipernetworks.junos

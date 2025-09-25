@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Bumped juniper.device to version 1.0.9, and added the installation of a patched to avoid [issue #775](https://github.com/Juniper/ansible-junos-stdlib/issues/775) until it is fixed
+
 ### Fixed
 
 - Fixed a test with an unexpected behavior. In previous Ansible version, a task with a `when` condition to `false` wasn't running its `register` statement, but that's not the case anymore
