@@ -95,7 +95,7 @@
     reboot: false
     nssu: true
     version: "{{ ex_firmware_version | default(ex_firmware | regex_replace('^.*-(\\d{2}\\..*\\d).*$', '\\1')) }}"
-  register: _ex_firmware_version_was_updated
+  register: _ex_firmware_version_was_updated_on_vc
   when: ansible_facts.junos.has_2RE
   tags: install_on_virtual_chassis_only
 
@@ -105,7 +105,10 @@
 
 
 - name: Manage snaphsots
-  when: not (_ex_firmware_version_was_updated.changed | default(false)) and ex_firmware_snapshot_cmd != ""
+  when: >-
+    not (_ex_firmware_version_was_updated.changed | default(false))
+    and not (_ex_firmware_version_was_updated_on_vc.changed | default(false))
+    and ex_firmware_snapshot_cmd != ""
   block:
 
     - name: Retrieve system snapshot informations

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed a test with an unexpected behavior. In previous Ansible version, a task with a `when` condition to `false` wasn't running its `register` statement, but that's not the case anymore
 - Refactored templates to suppress some `mgd: statement has no contents` warnings caused by empty blocks
 - Removed useless `version` entry from configuration templates
 
