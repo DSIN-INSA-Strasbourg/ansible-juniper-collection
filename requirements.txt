@@ -9,7 +9,7 @@ looseversion==1.3.0
 ncclient==0.6.19
 paramiko==2.8.1 # Don't upgrade ! Unable to use newer versions with non-els devices
 scp==0.15.0
-xmltodict==0.14.2
+xmltodict==1.0.0
 
 # ansible.utils.ipaddr filter requirement (used in insa_strasbourg.juniper/roles/ex_config/templates)
 netaddr==1.3.0
