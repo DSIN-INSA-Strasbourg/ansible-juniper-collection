@@ -643,35 +643,37 @@ protocols {
         }
         authenticator {
             authentication-profile-name rad8021x;
+    {% if (ex_config_interfaces + ex_config_laggs) | selectattr('dot1x', 'defined') | list | length > 0 %}
             interface {
-    {% for interface in ex_config_interfaces + ex_config_laggs if (interface.dot1x is defined) %}
+        {% for interface in ex_config_interfaces + ex_config_laggs if (interface.dot1x is defined) %}
                 {{ interface.name }} {
-        {% if interface.dot1x in ['both'] %}
+            {% if interface.dot1x in ['both'] %}
                     authentication-order [mac-radius dot1x]
-        {% endif %}
-        {% if (interface.is_uplink|default(false) or interface.maxhosts|default(ex_config_defaultmaxhosts|default(2))) > 1 or interface.toip|default(false) %}
+            {% endif %}
+            {% if (interface.is_uplink|default(false) or interface.maxhosts|default(ex_config_defaultmaxhosts|default(2))) > 1 or interface.toip|default(false) %}
                     supplicant multiple;
-        {% else %}
+            {% else %}
                     supplicant single-secure;
-        {% endif %}
+            {% endif %}
                     {# guest-vlan etudiants; # VLAN to which an interface is moved when no 802.1X supplicants are connected on the interface #}
                     {# server-reject-vlan etudiants; # specify that when the switch receives an Extensible Authentication Protocol Over LAN (EAPoL) Access-Reject message during the authentication process between the switch and the RADIUS authentication server, supplicants attempting access to the LAN are granted access and moved to a specific VLAN #}
-        {# {% if interface.toip|default(false) %}
+            {# {% if interface.toip|default(false) %}
                     lldp-med-bypass; # Doesn't exist anymore on ELS
-        {% endif %} #}
+            {% endif %} #}
                     server-fail use-cache;
-        {% if interface.dot1x in ['macradius', 'both'] %}
+            {% if interface.dot1x in ['macradius', 'both'] %}
                     mac-radius {
-            {% if interface.dot1x in ['macradius'] %}
+                {% if interface.dot1x in ['macradius'] %}
                         restrict;
-            {% endif %}
+                {% endif %}
                         flap-on-disconnect;
                     }
-        {% endif %}
+            {% endif %}
                     {# reauthentication 3600; #}
                 }
-    {% endfor %}
+        {% endfor %}
             }
+    {% endif %}
         }
     }
 {% endif %}

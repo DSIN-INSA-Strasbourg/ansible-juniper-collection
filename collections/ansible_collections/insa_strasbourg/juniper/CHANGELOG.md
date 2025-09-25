@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Refactored templates to suppress some `mgd: statement has no contents` warnings caused by empty blocks
 - Removed useless `version` entry from configuration templates
 
 ## [1.0.2] - 2025-09-23

@@ -835,35 +835,37 @@ protocols {
         }
         authenticator {
             authentication-profile-name rad8021x;
+    {% if (ex_config_interfaces + ex_config_laggs) | selectattr('dot1x', 'defined') | list | length > 0 %}
             interface {
-    {% for interface in ex_config_interfaces + ex_config_laggs if (interface.dot1x is defined) %}
+        {% for interface in ex_config_interfaces + ex_config_laggs if (interface.dot1x is defined) %}
                 {{ interface.name }} {
-        {% if interface.dot1x in ['both'] %}
+            {% if interface.dot1x in ['both'] %}
                     authentication-order [mac-radius dot1x]
-        {% endif %}
-        {% if (interface.is_uplink|default(false) or interface.maxhosts|default(ex_config_defaultmaxhosts|default(2))) > 1 or interface.toip|default(false) %}
+            {% endif %}
+            {% if (interface.is_uplink|default(false) or interface.maxhosts|default(ex_config_defaultmaxhosts|default(2))) > 1 or interface.toip|default(false) %}
                     supplicant multiple;
-        {% else %}
+            {% else %}
                     supplicant single-secure;
-        {% endif %}
+            {% endif %}
                     {# guest-vlan etudiants; # VLAN to which an interface is moved when no 802.1X supplicants are connected on the interface #}
                     {# server-reject-vlan etudiants; # specify that when the switch receives an Extensible Authentication Protocol Over LAN (EAPoL) Access-Reject message during the authentication process between the switch and the RADIUS authentication server, supplicants attempting access to the LAN are granted access and moved to a specific VLAN #}
-        {# {% if interface.toip|default(false) %}
+            {# {% if interface.toip|default(false) %}
                     lldp-med-bypass;  # Doesn't exist anymore on ELS
-        {% endif %} #}
+            {% endif %} #}
                     server-fail use-cache;
-        {% if interface.dot1x in ['macradius', 'both'] %}
+            {% if interface.dot1x in ['macradius', 'both'] %}
                     mac-radius {
-            {% if interface.dot1x in ['macradius'] %}
+                {% if interface.dot1x in ['macradius'] %}
                         restrict;
-            {% endif %}
+                {% endif %}
                         flap-on-disconnect;
                     }
-        {% endif %}
+            {% endif %}
                     {# reauthentication 3600; #}
                 }
-    {% endfor %}
+        {% endfor %}
             }
+    {% endif %}
         }
     }
 {% endif %}
@@ -1093,53 +1095,66 @@ access {
     }
 }
 {% endif %}
+{# Store voip enabled interfaces in a var #}
+{% set voip = namespace(interfaces=[]) %}
+{% for interface in ex_config_interfaces + ex_config_laggs if not interface.used_by_lagg_or_vcport|default(false) and interface.toip|default(false) and interface.member_of_lagg is not defined and interface.portmirroring is not defined %}
+    {{- voip.interfaces.append(interface) -}}
+{% endfor %}
+{# /Store voip enabled interfaces in a var #}
+{# Store maclimit enabled interfaces in a var #}
+{% set maclimit = namespace(interfaces=[]) %}
+{% for interface in ex_config_interfaces + ex_config_laggs if not interface.is_uplink|default(false) and not interface.no_maxhosts|default(false) and not interface.used_by_lagg_or_vcport|default(false) and interface.member_of_lagg is not defined and not interface.disabled|default(false) and not interface.trunk|default(false) and (interface.maxhosts is defined or ex_config_defaultmaxhosts is defined) %}
+    {{- maclimit.interfaces.append(interface) -}}
+{% endfor %}
+{# /Store maclimit enabled interfaces in a var #}
+{% if (_ex_config_available_rtgs|count > 0)
+    or (ex_config_toip_vlan is defined and voip.interfaces|length > 0)
+    or (maclimit.interfaces|length > 0)
+%}
 switch-options {
 {# RTG #}
-{% if _ex_config_available_rtgs|count > 0 %}
+    {% if _ex_config_available_rtgs|count > 0 %}
     redundant-trunk-group {
-{%   for rtg in _ex_config_available_rtgs %}
-    {%- set primary = (ex_config_interfaces | selectattr('rtg', 'defined') | selectattr('rtg.name', 'eq', rtg) | selectattr('rtg.primary', 'defined') | list)[0] -%}
-    {%- set secondary = (ex_config_interfaces | selectattr('rtg', 'defined') | selectattr('rtg.name', 'eq', rtg) | selectattr('rtg.secondary', 'defined') | list)[0] %}
+        {% for rtg in _ex_config_available_rtgs %}
+            {%- set primary = (ex_config_interfaces | selectattr('rtg', 'defined') | selectattr('rtg.name', 'eq', rtg) | selectattr('rtg.primary', 'defined') | list)[0] -%}
+            {%- set secondary = (ex_config_interfaces | selectattr('rtg', 'defined') | selectattr('rtg.name', 'eq', rtg) | selectattr('rtg.secondary', 'defined') | list)[0] %}
         group {{ rtg }} {
-{%     if primary.rtg.wait_before_restore is defined %}
+            {% if primary.rtg.wait_before_restore is defined %}
             preempt-cutover-timer {{ primary.rtg.wait_before_restore }};
-{%     endif %}
+            {% endif %}
             interface {{ primary.name }} {
                 primary;
             }
             interface {{ secondary.name }};
         }
-{%   endfor %}
+        {% endfor %}
     }
-{% endif %}
-{# VoIP / ToIP#}
-{% set voip = namespace(interfaces=[]) %}
-{% for interface in ex_config_interfaces + ex_config_laggs if not interface.used_by_lagg_or_vcport|default(false) and interface.toip|default(false) and interface.member_of_lagg is not defined and interface.portmirroring is not defined %}
-    {{- voip.interfaces.append(interface) -}}
-{% endfor %}
-{% if ex_config_toip_vlan is defined and voip.interfaces|length > 0 %}
+    {% endif %}
+    {# VoIP / ToIP#}
+    {% if ex_config_toip_vlan is defined and voip.interfaces|length > 0 %}
     voip {
-    {% for interface in voip.interfaces %}
+        {% for interface in voip.interfaces %}
         interface {{ interface.name }} {{ '{ # ' ~ interface.description if interface.description is defined and interface.description != None else '{' }}
             vlan {{ ex_config_toip_vlan }};
         }
-    {% endfor %}
+        {% endfor %}
     }
-{% endif %}
-{# mac-limit #}
-{% for interface in ex_config_interfaces + ex_config_laggs if not interface.is_uplink|default(false) and not interface.no_maxhosts|default(false) and not interface.used_by_lagg_or_vcport|default(false) and interface.member_of_lagg is not defined and not interface.disabled|default(false) and not interface.trunk|default(false) and (interface.maxhosts is defined or ex_config_defaultmaxhosts is defined) %}
+    {% endif %}
+    {# mac-limit #}
+    {% for interface in maclimit.interfaces %}
     interface {{ interface.name }} {
         interface-mac-limit {
-    {% if interface.toip|default(false) %}
+        {% if interface.toip|default(false) %}
             {{ (interface.maxhosts|default(ex_config_defaultmaxhosts) + 1)|string }}
-    {% else %}
+        {% else %}
             {{ interface.maxhosts|default(ex_config_defaultmaxhosts)|string }}
-    {% endif %}
+        {% endif %}
             packet-action drop;
         }
     }
-{% endfor %}
+    {% endfor %}
 }
+{% endif %}
 {# Virtual-chassis #}
 {% if ex_config_virtual_chassis|length > 0 %}
 virtual-chassis {
