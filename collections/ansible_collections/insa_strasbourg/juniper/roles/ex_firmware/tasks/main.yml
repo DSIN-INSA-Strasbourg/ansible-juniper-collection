@@ -82,8 +82,11 @@
     validate: "{{ ex_firmware_validate }}"
     reboot: false
     version: "{{ ex_firmware_version | default(ex_firmware | regex_replace('^.*-(\\d{2}\\..*\\d).*$', '\\1')) }}"
+    install_timeout: 1800
   notify: Plan reboot
   register: _ex_firmware_version_was_updated
+  vars:
+    ansible_command_timeout: 2000
   when: not ansible_facts.junos.has_2RE
   tags: install_on_critical
 
@@ -95,7 +98,10 @@
     reboot: false
     nssu: true
     version: "{{ ex_firmware_version | default(ex_firmware | regex_replace('^.*-(\\d{2}\\..*\\d).*$', '\\1')) }}"
+    install_timeout: 3600
   register: _ex_firmware_version_was_updated_on_vc
+  vars:
+    ansible_command_timeout: 4000
   when: ansible_facts.junos.has_2RE
   tags: install_on_virtual_chassis_only
 
@@ -117,6 +123,8 @@
         timeout: 1800
         formats: "{{ ex_firmware_snapshot_version_format }}"
       register: _ex_firmware_version_stdout
+      vars:
+        ansible_command_timeout: 2000
       tags: always
 
 
@@ -161,6 +169,8 @@
         commands: "{{ ex_firmware_snapshot_cmd }}"
         timeout: 1800
       changed_when: true
+      vars:
+        ansible_command_timeout: 2000
       when: >
         'check' not in ansible_run_tags and
         _ex_firmware_version_oldversions|default([])|length > 0
