@@ -230,6 +230,18 @@ then
     # Installing Ansible and Python dependencies
     echo -e "\n\n*** Installing Ansible and Python dependencies ***\n"
     pip3 install -r requirements-python.txt
+
+    # Patch .venv-ansible/lib/pythonX.YZ/site-packages/ncclient/transport/ssh.py
+    # to enable compatibility with legacy (non-ELS) devices
+    # See https://github.com/ncclient/ncclient/issues/526
+    echo -e "\n\n*** PATCHING ncclient to enable compatibility with legacy (non-ELS) devices ***\n"
+    cp -a \
+        ".venv-ansible/lib/${PYTHONCMD}/site-packages/ncclient/transport/ssh.py" \
+        ".venv-ansible/lib/${PYTHONCMD}/site-packages/ncclient/transport/ssh.py.ori"
+
+    sed -i \
+        's/self._transport = paramiko.Transport(sock)/self._transport = paramiko.Transport(sock, disabled_algorithms={"pubkeys": ["ssh-ed25519", "rsa-sha2-512", "rsa-sha2-256"],  "keys": ["ssh-ed25519", "rsa-sha2-512", "rsa-sha2-256"]})/' \
+        ".venv-ansible/lib/${PYTHONCMD}/site-packages/ncclient/transport/ssh.py"
 fi
 
 if [ -z ${DONTINSTALLANSIBLEREQUIREMENTS+x} ]
@@ -237,18 +249,6 @@ then
     # Installing Ansible external collections and roles
     echo -e "\n\n*** Installing Ansible external collections and roles ***\n"
     ansible-galaxy install -r requirements.yml
-
-    # Patch .ansible/collections/ansible_collections/juniper/device/plugins/modules/software.py
-    # with https://github.com/Juniper/ansible-junos-stdlib/pull/776
-    # until https://github.com/Juniper/ansible-junos-stdlib/issues/775 is fixed
-    echo -e "\n\n*** PATCHING software module from juniper.device collection ***\n"
-    cp -a \
-        ".ansible/collections/ansible_collections/juniper/device/plugins/modules/software.py" \
-        ".ansible/collections/ansible_collections/juniper/device/plugins/modules/software.py.ori"
-
-    curl --silent \
-        -L "https://raw.githubusercontent.com/Boris-INSA/ansible-junos-stdlib/d495f426a3f50e2b9169d7e32854061f4183573b/ansible_collections/juniper/device/plugins/modules/software.py" \
-        > ".ansible/collections/ansible_collections/juniper/device/plugins/modules/software.py"
 fi
 
 if [ ! -z ${INSTALLANSIBLELINT+x} ]

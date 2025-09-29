@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     1. Main one, the nasty [issue #535](https://github.com/ansible-collections/junipernetworks.junos/issues/535) was _randomly_ met on EX4650, leading to configuration changes not being deployed to devices, and Ansible erroneously reporting "no changes" to the device config
     2. The whole collection is now only using the juniper.device collection. However, junipernetworks.junos and its requirements are kept to facilitate its eventual use
 - Replaced `juniper.device` existing `local` connection used by `juniper.device.pyez`, as some short timeouts were met with the local connection
-- Bumped juniper.device to version 1.0.9, and added the installation of a patched to avoid [issue #775](https://github.com/Juniper/ansible-junos-stdlib/issues/775) until it is fixed
+- Bumped juniper.device to version 1.0.9, and added the installation of a patch into `ncclient` to allow using latest paramiko with legacy Juniper devices - see [ncclient #526](https://github.com/ncclient/ncclient/issues/526)
 
 ### Fixed
 
