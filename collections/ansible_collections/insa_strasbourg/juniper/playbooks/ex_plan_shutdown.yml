@@ -24,7 +24,7 @@
   connection: juniper.device.pyez
   gather_facts: false
   vars:
-    hostname: "{{ ex_config_hostname }}"
+    host: "{{ inventory_hostname }}"
   vars_prompt:
     - name: shutdown_when
       prompt: |

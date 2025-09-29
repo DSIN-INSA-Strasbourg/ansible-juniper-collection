@@ -24,6 +24,6 @@
   connection: juniper.device.pyez
   gather_facts: false
   vars:
-    hostname: "{{ ex_config_hostname }}"
+    host: "{{ inventory_hostname }}"
   roles:
     - insa_strasbourg.juniper.ex_config
