@@ -31,7 +31,7 @@
 
 
 - name: Compare running firmware version with latest
-  ansible.builtin.debug:
+  ansible.builtin.fail:
     msg: >-
       Not running latest firmware !
       Running {{ ansible_facts.junos.version }}, latest
