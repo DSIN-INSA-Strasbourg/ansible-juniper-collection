@@ -77,6 +77,7 @@ juniper_ex4650:
 |ex_config_save_dir  |$HOME/.juniper-configs  |Dossier local (sur le contrôleur Ansible) où seront générés les fichiers de configuration des équipements  |Non |
 |ex_config_commitconfirm_delay  |5  |Délai en **minutes** durant lequel la nouvelle configuration devra être confirmée. au bout de ce délai, l'ancienne configuration sera restaurée. Doit être bien plus long que `ex_config_delay_between_commitconfirm_and_commit` afin d'éviter des rollbacks inutiles lorsque le playbook est executé sur plusieurs équipements  |Non |
 |ex_config_delay_between_commitconfirm_and_commit  |15  |Délai d'attente en **secondes** entre le *commit confirm* et sa confirmation. Ce délai doit permettre de perdre la connectivité avec l'équipement en cas d'erreur de configuration  |Non |
+|ex_config_ignore_commit_warnings  |`["mgd: [0-9]+g config will be applied to ports [0-9]+ to [0-9]+"]`  |Liste des avertissements à ignorer (expressions régulières). Tout avertissement non-spécifié dans cette variable qui sera levé par l'équipement lors de l'analyse de sa configuration fera échouer la tâche  |Non |
 
 ## Configuration de base d'un commutateur
 
