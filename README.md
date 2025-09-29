@@ -21,7 +21,7 @@ Add the following requirement in your playbook's **requirements.yml**:
 
 ```yaml
 ---
-# See available releases for VERSION
+# See available releases for VERSION: https://github.com/DSIN-INSA-Strasbourg/ansible-juniper-collection/releases
 collections:
   - name: https://github.com/DSIN-INSA-Strasbourg/ansible-juniper-collection/releases/download/VERSION/insa_strasbourg-juniper-VERSION.tar.gz
 ```
