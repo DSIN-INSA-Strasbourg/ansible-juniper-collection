@@ -151,7 +151,6 @@
       ansible.builtin.fail:
         msg: "Snapshot is outdated ! Snapshot is {{ _ex_firmware_version_oldversions.0 }}, firmware is {{ ansible_facts.junos.version }}"
       when: _ex_firmware_version_oldversions|default([])|length > 0
-      failed_when: false
       tags:
         - never
         - check

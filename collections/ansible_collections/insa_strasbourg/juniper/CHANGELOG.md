@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     2. The whole collection is now only using the juniper.device collection. However, junipernetworks.junos and its requirements are kept to facilitate its eventual use
 - Replaced `juniper.device` existing `local` connection used by `juniper.device.pyez`, as some short timeouts were met with the local connection
 - Bumped juniper.device to version 1.0.9, and added the installation of a patch into `ncclient` to allow using latest paramiko with legacy Juniper devices - see [ncclient #526](https://github.com/ncclient/ncclient/issues/526)
+- Now fails when calling `insa_strasbourg.juniper.ex_firmware` playbook with tag `check` if the device runs on an outdated firmware or has an outdated snapshot
 
 ### Fixed
 
