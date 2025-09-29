@@ -3,13 +3,13 @@
 # https://github.com/Juniper/ansible-junos-stdlib/blob/master/requirements.txt
 ansible-pylibssh==1.2.2
 jsnapy==1.3.8
-junos-eznc==2.7.1
+junos-eznc==2.7.5
 jxmlease==1.0.3
 looseversion==1.3.0
-ncclient==0.6.19
-paramiko==2.8.1 # Don't upgrade ! Unable to use newer versions with non-els devices
+ncclient==0.7.0  # On version change, ensure the patch from reset_ansible_venv is still working
+paramiko==4.0.0
 scp==0.15.0
-xmltodict==1.0.0
+xmltodict==1.0.2
 
 # ansible.utils.ipaddr filter requirement (used in insa_strasbourg.juniper/roles/ex_config/templates)
 netaddr==1.3.0
