@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Now compatible with Python 3.13
+
 ### Changed
 
 - Major change in role `insa_strasbourg.juniper.ex_config`: collection [juniper.device](https://galaxy.ansible.com/ui/repo/published/juniper/device/) is now used in replacement of [junipernetworks.junos](https://docs.ansible.com/ansible/latest/collections/junipernetworks/junos/index.html)
