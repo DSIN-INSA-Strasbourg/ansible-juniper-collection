@@ -111,6 +111,8 @@ Le commutateur doit être associé à un groupe de modèle (ie. `juniper_ex4600`
 
 ## Déploiement
 
+### Sur équipement seul (hors châssis virtuel)
+
 Déploiement sur tous les commutateurs non critiques, et ne faisant pas partie d'un châssis virtuel (stack) :
 
 ```bash
@@ -134,6 +136,13 @@ Commande de déploiement sur tous les commutateurs, y compris les critiques, et 
 ```bash
 ansible-playbook -i network insa_strasbourg.juniper.ex_firmware --tags install_on_critical
 ```
+
+### Sur chassis virtuel
+
+> [!WARNING]
+> Les tests réalisés sur les *Nonstop software upgrade (NSSU)* de châssis virtuels ont donné des résultats relativement décevants.
+> Même lors d'un déroulement sans erreur, la playbook échouera car il perdra sa connexion au [*routing engine RE* principal lorsque celui-ci passera en secondaire pour être mis à jour](https://github.com/Juniper/ansible-junos-stdlib/issues/431).
+> **La fonctionnalité est conservée pour le principe, mais son usage est déconseillé.**
 
 Commande de déploiement sur tous les commutateurs non critiques faisant partie d'un châssis virtuel (stack) :
 
