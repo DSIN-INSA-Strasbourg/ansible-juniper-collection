@@ -119,7 +119,7 @@ Il est possible de définir des classes de login supplémentaires en les spécif
 | Option | Valeur par défaut | Description | Obligatoire |
 | --- | --- | --- | --- |
 |name  |*N/A*  |Nom de la classe de login (doit être unique)  |Oui  |
-|permissions  |*N/A//  |Liste des [permissions](https://www.juniper.net/documentation/us/en/software/junos/user-access-evo/user-access/topics/topic-map/junos-os-login-class.html#id-junos-os-login-classes-overview__d8e136) à octroyer à la classe de login courante  |Oui  |
+|permissions  |*N/A*  |Liste des [permissions](https://www.juniper.net/documentation/us/en/software/junos/user-access-evo/user-access/topics/topic-map/junos-os-login-class.html#id-junos-os-login-classes-overview__d8e136) à octroyer à la classe de login courante  |Oui  |
 
 Exemple :
 
@@ -657,8 +657,8 @@ Variables d'interfaces :
 | Option | Valeur par défaut | Description | Obligatoire |
 | --- | --- | --- | --- |
 |ex_config_portsecurity_enable_dhcpsnooping  |false  |Active le [DHCP snooping](https://www.juniper.net/documentation/en_US/junos/topics/concept/port-security-dhcp-snooping.html)  |Non  |
-|ex_config_portsecurity_enable_dynamic_arp_inspection  |false  |Active [Dynamic ARP inspection](https://www.juniper.net/documentation/en_US/junos/topics/task/configuration/understanding-and-using-dai.html#id-understanding-arp-spoofing-and-inspection). L'option //ex_config_portsecurity_enable_dhcpsnooping* doit également être à `true` pour que la fonctionnalité soit active  |Non  |
-|ex_config_portsecurity_enable_ip_source_guard  |false  |Active [IP Source Guard](https://www.juniper.net/documentation/en_US/junos/topics/concept/port-security-ip-source-guard.html). L'option //ex_config_portsecurity_enable_dhcpsnooping* doit également être à `true` pour que la fonctionnalité soit active  |Non  |
+|ex_config_portsecurity_enable_dynamic_arp_inspection  |false  |Active [Dynamic ARP inspection](https://www.juniper.net/documentation/en_US/junos/topics/task/configuration/understanding-and-using-dai.html#id-understanding-arp-spoofing-and-inspection). L'option *ex_config_portsecurity_enable_dhcpsnooping* doit également être à `true` pour que la fonctionnalité soit active  |Non  |
+|ex_config_portsecurity_enable_ip_source_guard  |false  |Active [IP Source Guard](https://www.juniper.net/documentation/en_US/junos/topics/concept/port-security-ip-source-guard.html). L'option *ex_config_portsecurity_enable_dhcpsnooping* doit également être à `true` pour que la fonctionnalité soit active  |Non  |
 |ex_config_dhcptrusted_default  |  |Définit la valeur par défaut qui sera appliquée à la variable d'interface `dhcptrusted` lorsque celle-ci n'est pas définie. Par défaut, lorsque `ex_config_dhcptrusted_default` n'est pas définie, vaudra `true` pour les interfaces en mode trunk, et `false` pour les interfaces en mode access. Si `ex_config_dhcptrusted_default` est définie, sa valeur sera appliquée quelque soit le mode de l'interface.   |Non  |
 
 Variables d'interfaces :
@@ -733,7 +733,7 @@ ex_config_virtual_chassis:
 
 ### Balises pour Netmagis
 
-Le rôle permet d'ajouter automatiquement les balises requises par le module *topo// de [Netmagis](http://netmagis.org/config-topo.html).
+Le rôle permet d'ajouter automatiquement les balises requises par le module *topo* de [Netmagis](http://netmagis.org/config-topo.html).
 
 Activation de la fonctionnalité :
 
@@ -897,7 +897,7 @@ ex_config_laggs:
 
 ### MSTP
 
-Le protocole MSTP découpe le réseau de sa région en plusieurs topologie spanning tree.
+Le protocole MSTP découpe le réseau de sa région en plusieurs topologies spanning tree.
 
 - Chaque MSTI définie par l'utilisateur est une topologie, qui contient les VLANs que l'utilisateur a affecté. Les MSTI sont facultatives, mais n'en créer aucune revient à utiliser le RSTP
 - La CIST (forcément présente) est une topologie, qui va contenir tous les VLAN non affectés à une MSTI
