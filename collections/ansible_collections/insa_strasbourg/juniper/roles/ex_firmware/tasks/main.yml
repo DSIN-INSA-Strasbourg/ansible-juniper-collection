@@ -80,6 +80,7 @@
   juniper.device.software:
     remote_package: "{{ ex_firmware_baseurl }}/{{ ex_firmware_dir }}/{{ ex_firmware }}"
     validate: "{{ ex_firmware_validate }}"
+    all_re: false
     reboot: false
     version: "{{ ex_firmware_version | default(ex_firmware | regex_replace('^.*-(\\d{2}\\..*\\d).*$', '\\1')) }}"
     install_timeout: 1800
@@ -95,10 +96,12 @@
   juniper.device.software:
     remote_package: "{{ ex_firmware_baseurl }}/{{ ex_firmware_dir }}/{{ ex_firmware }}"
     validate: "{{ ex_firmware_validate }}"
+    all_re: "{{ ex_firmware_use_nssu_on_vc }}"
     reboot: false
-    nssu: true
+    nssu: "{{ ex_firmware_use_nssu_on_vc }}"
     version: "{{ ex_firmware_version | default(ex_firmware | regex_replace('^.*-(\\d{2}\\..*\\d).*$', '\\1')) }}"
     install_timeout: 3600
+  notify: Plan reboot
   register: _ex_firmware_version_was_updated_on_vc
   vars:
     ansible_command_timeout: 4000

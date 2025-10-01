@@ -6,7 +6,7 @@ Ce rôle sert à assurer la mise à jour des firmwares des commutateurs Juniper,
 Pour la masse des commutateurs, ils seront mis à jour uniquement si nécessaire et redémarrés selon le paramétrage de la variable `ex_firmware_reboot_at`.
 Il y a 2 cas particuliers, qui par défaut ne sont pas mis à jour par ce rôle :
 
-- Les virtual-chassis, dont l'interruption (relative) de service a lieu durant l'installation du firmware, qui ne seront mis à jour en [NSSU](https://www.juniper.net/documentation/en_US/junos/topics/concept/nssu-ex-series.html) qu’indépendamment des autres commutateurs si le playbook est lancé avec le tag `install_on_virtual_chassis_only`
+- Les châssis virtuels, qui ne seront mis à jour que si le playbook est lancé avec le tag `install_on_virtual_chassis_only`, et dont le déroulement de la mise à jour dépend de la valeur de la variable `ex_firmware_use_nssu_on_vc`
 - Les commutateurs déclarés comme critiques, qui ne seront mis à jour que si le playbook est lancé avec le tag `install_on_critical`
 
 ## Groupes d'inventaire utilisés par le rôle
@@ -94,6 +94,7 @@ Les chemins sont relatifs au dossier Ansible
 | --- | --- | --- | --- |
 |ex_firmware_baseurl  |[https://www.example.com/PLEASE/SET/ME](https://www.example.com/PLEASE/SET/ME)  |Le préfixe de l'URL de téléchargement des firmware, ie. [https://www.example.com/PLEASE/SET/ME](https://www.example.com/PLEASE/SET/ME)  |Oui  |
 |ex_firmware_reboot_at  |"{{ '%y%m%d0100' \| strftime(ansible_date_time.epoch \| int + 86400) }}" (*le jour suivant à 01:00*)  |Indique quand redémarrer le commutateur suite à une mise à jour. Les valeurs possibles sont : <br/> - "now" : redémarre immédiatement <br/> - "+minutes" : redémarre après le nombre de minutes spécifié <br/> - "yymmddhhmm" : redémarre à la date et l'heure spécifiées |Non  |
+|ex_firmware_use_nssu_on_vc  |false  |Indique si le firmware d'un chassis virtuel doit être installé en *NSSU*, auquel cas le châssis virtuel ne sera pas redémarré selon `ex_firmware_reboot_at`, puisque ses membres auront été redémarrés individuellement l'un après l'autre. **Le déploiement par NSSU étant plus une source de problèmes que de bienfaits, son usage est déconseillé bien que possible**. Si cette variable est à `false`, le firmware du chassis virtuel sera déployé sur tous les membres, qui redémarreront selon la consigne de `ex_firmware_reboot_at`  |Non  |
 
 ## Configuration d'un modèle de commutateur
 
@@ -140,7 +141,7 @@ ansible-playbook -i network insa_strasbourg.juniper.ex_firmware --tags install_o
 ### Sur chassis virtuel
 
 > [!WARNING]
-> Les tests réalisés sur les *Nonstop software upgrade (NSSU)* de châssis virtuels ont donné des résultats relativement décevants.
+> Les tests réalisés sur les *Nonstop software upgrade (NSSU)* de châssis virtuels - lorsque `ex_firmware_use_nssu_on_vc` vaut `true` - ont donné des résultats relativement décevants.
 > Même lors d'un déroulement sans erreur, la playbook échouera car il perdra sa connexion au [*routing engine RE* principal lorsque celui-ci passera en secondaire pour être mis à jour](https://github.com/Juniper/ansible-junos-stdlib/issues/431).
 > **La fonctionnalité est conservée pour le principe, mais son usage est déconseillé.**
 

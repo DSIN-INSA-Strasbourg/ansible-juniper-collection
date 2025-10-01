@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Disabled the *nonstop service upgrade (NSSU)*, previously the only way to upgrade virtual chassis, as it was not very reliable. Added the variable `ex_firmware_use_nssu_on_vc` to allow fearless users to continue using it
+
 ### Fixed
 
 - Increased tasks timeouts for firmware installations

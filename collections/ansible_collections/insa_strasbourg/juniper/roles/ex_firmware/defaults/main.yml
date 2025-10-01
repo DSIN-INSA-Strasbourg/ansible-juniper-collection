@@ -35,3 +35,9 @@ ex_firmware_snapshot_version_format: "text"
 #   - "+minutes" : The reboot takes effect in minutes minutes from now.
 #   - "yymmddhhmm" : The reboot takes effect at yymmddhhmm absolute time, specified as year, month, day, hour, and minute.
 ex_firmware_reboot_at: "{{ '%y%m%d0100' | strftime(ansible_date_time.epoch | int + 86400) }}"
+
+# Only used on virtual chassis
+# Be aware that NSSU sounds great in theory, but suffer has many caveats in practice
+# If true, firmwares will be deployed with nonstop service upgrade, without reboot
+# If false, firmwares will be deployed on each RE, with a reboot of the VC scheduled
+ex_firmware_use_nssu_on_vc: false

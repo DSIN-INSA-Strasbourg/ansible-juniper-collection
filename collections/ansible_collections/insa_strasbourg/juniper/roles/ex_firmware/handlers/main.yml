@@ -23,4 +23,5 @@
   juniper.device.system:
     action: reboot
     at: "{{ ex_firmware_reboot_at }}"
+  when: not ansible_facts.junos.has_2RE or not ex_firmware_use_nssu_on_vc
   listen: Plan reboot
