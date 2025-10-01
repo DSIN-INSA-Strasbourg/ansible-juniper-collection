@@ -781,8 +781,8 @@ protocols {
             vlan [ {{ (currentmsti.vlans | vlan_parser(9999999)).0.split(',') | join(' ') }} ];
         {% for interface in ex_config_interfaces + ex_config_laggs if (not interface.is_uplink|default(false) or interface.stp_link_cost is defined) and not interface.used_by_lagg_or_vcport|default(false) and interface.member_of_lagg is not defined and interface.portmirroring is not defined and interface.rtg is not defined %}
             {% set currentif = namespace(opts=[]) %}
-            {% if interface.msti_link is defined and msti.id in interface.msti_link %}
-                {{- currentif.opts.append("cost " ~ interface.msti_link[msti.id] ~ ";") -}}
+            {% if interface.msti_link_cost is defined and msti.id in interface.msti_link_cost %}
+                {{- currentif.opts.append("cost " ~ interface.msti_link_cost[msti.id] ~ ";") -}}
             {% elif not interface.is_uplink|default(false) %}
                 {{- currentif.opts.append("cost " ~ interface.stp_link_cost|default(ex_config_stp_default_edge_link_cost) ~ ";") -}}
             {% elif interface.stp_link_cost is defined %}

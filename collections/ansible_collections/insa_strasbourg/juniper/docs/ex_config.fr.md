@@ -969,7 +969,7 @@ Variables d'interfaces :
 | Option | Valeur par défaut | Description | Obligatoire |
 | --- | --- | --- | --- |
 |stp_link_cost  |[Déterminé automatiquement par l'équipement selon le type d'interface](https://kb.juniper.net/InfoCenter/index?page=content&id=KB31861)  |Coût du lien pour le spanning-tree sur la CIST  |Non  |
-|msti_link  |  |Dictionnaire où la clé est le mstiID et la valeur coût du lien pour cette MSTI  |Non  |
+|msti_link_cost  |  |Dictionnaire où la clé est le mstiID et la valeur coût du lien pour cette MSTI  |Non  |
 |disable_stp  |false  |Si `true`, désactive le spanning-tree sur cette interface  |Non  |
 |is_uplink  |false  |Si `true`, indique que l'interface sert à raccorder un autre commutateur/équipement réseau. Sa valeur a une influence sur le comportement de la COS/QoS, du spanning tree, des restrictions du nombre d'équipements raccordés sur des interfaces et du 802.1X   |Non  |
 
@@ -981,7 +981,7 @@ Exemple de paramétrage d'une interface :
 ex_config_laggs:
   - name: ae10
     stp_link_cost: "200000"
-    msti_link:
+    msti_link_cost:
       1: "2000"
       2: "200000"
       3: "200000"

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **BREAKING CHANGE** The MSTP interface variable `msti_link` has been renamed to a more understandable name `msti_link_cost`
 - Disabled the *nonstop service upgrade (NSSU)*, previously the only way to upgrade virtual chassis, as it was not very reliable. Added the variable `ex_firmware_use_nssu_on_vc` to allow fearless users to continue using it
 
 ### Fixed
