@@ -1,5 +1,10 @@
 # Ansible - rôle insa_strasbourg.juniper.ex_firmware
 
+[![en](https://img.shields.io/badge/lang-en-red.svg)](https://github.com/DSIN-INSA-Strasbourg/ansible-juniper-collection/blob/main/collections/ansible_collections/insa_strasbourg/juniper/docs/ex_firmware.md)
+[![fr](https://img.shields.io/badge/lang-fr-blue.svg)](https://github.com/DSIN-INSA-Strasbourg/ansible-juniper-collection/blob/main/collections/ansible_collections/insa_strasbourg/juniper/docs/ex_firmware.fr.md)
+
+---
+
 ## Introduction
 
 Ce rôle sert à assurer la mise à jour des firmwares des commutateurs Juniper, ainsi que de leurs images de secours (system snapshot).

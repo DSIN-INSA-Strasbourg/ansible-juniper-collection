@@ -1,5 +1,10 @@
 # Ansible - rôle insa_strasbourg.juniper.ex_config
 
+[![en](https://img.shields.io/badge/lang-en-red.svg)](https://github.com/DSIN-INSA-Strasbourg/ansible-juniper-collection/blob/main/collections/ansible_collections/insa_strasbourg/juniper/docs/ex_config.md)
+[![fr](https://img.shields.io/badge/lang-fr-blue.svg)](https://github.com/DSIN-INSA-Strasbourg/ansible-juniper-collection/blob/main/collections/ansible_collections/insa_strasbourg/juniper/docs/ex_config.fr.md)
+
+---
+
 ## Introduction
 
 Ce rôle sert à assurer l'exploitation courante des commutateurs Juniper, et à déployer les changements de configuration.
