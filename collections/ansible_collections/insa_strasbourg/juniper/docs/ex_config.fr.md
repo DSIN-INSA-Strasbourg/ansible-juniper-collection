@@ -443,7 +443,7 @@ ex_config_interfaces:
 
 #### Cas particulier de l'agrégat primary/backup
 
-Cet agrégat se paramètre exactement comme l'agrégat standard, mais il doit impérativement être rattaché à 2 interfaces physiques, et il faut préciser ainsi laquelle sera la principale et laquelle sera celle de secours :
+Cet agrégat se paramètre exactement comme l'agrégat standard, mais il doit impérativement être rattaché à exactement 2 interfaces physiques, et il faut préciser ainsi laquelle sera la principale et laquelle sera celle de secours :
 
 ```yaml
 ex_config_interfaces:
@@ -466,7 +466,7 @@ En cas de défaillance du lien principal, le lien de secours s'activera en quelq
 
 #### Suppression d'un lagg
 
-Supprimer un lagg doit malheureusement se faire en 2 étapes, sans quoi l'application des règles de QoS entraînera une erreur, car il semblerait que le commutateur essaie de les appliquer alors que son "état de compilation interne" lui indique que les interfaces sont encore associées à un lagg.
+Supprimer un lagg doit malheureusement parfois se faire en 2 étapes, sans quoi l'application des règles de QoS entraînera une erreur, car il semblerait que le commutateur essaie de les appliquer alors que son "état de compilation interne" lui indique que les interfaces sont encore associées à un lagg.
 
 En première étape, il faut supprimer l'interface de lagg `ae*n*` désirée, et marquer les interfaces physiques associées ainsi :
 
@@ -902,7 +902,7 @@ Le protocole MSTP découpe le réseau de sa région en plusieurs topologies span
 - Chaque MSTI définie par l'utilisateur est une topologie, qui contient les VLANs que l'utilisateur a affecté. Les MSTI sont facultatives, mais n'en créer aucune revient à utiliser le RSTP
 - La CIST (forcément présente) est une topologie, qui va contenir tous les VLAN non affectés à une MSTI
 
-En fonctionnement normal, avec les liens principaux et de secours up, il est de ce fait possible d'avoir une configuration ou un lien de secours pour la CIST qui sera un lien principal pour une MSTI, et réciproquement.
+En fonctionnement avec des liens redondants, il est possible d'avoir une configuration où un lien de secours pour la CIST sera un lien principal pour une MSTI et réciproquement, permettant ainsi de répartir le trafic réseau.
 
 #### Configuration globale
 
@@ -964,7 +964,7 @@ Variables d'interfaces :
 | Option | Valeur par défaut | Description | Obligatoire |
 | --- | --- | --- | --- |
 |stp_link_cost  |[Déterminé automatiquement par l'équipement selon le type d'interface](https://kb.juniper.net/InfoCenter/index?page=content&id=KB31861)  |Coût du lien pour le spanning-tree sur la CIST  |Non  |
-|msti_link  |  |Dictionnaire où la clé est le mstiID et la valeur le type de liaison (principale ou secours) : va changer le coût du lien pour le spanning tree dans la MSTI. Les valeurs possibles sont {{ stp_primary_link }} et {{ stp_backup_link }}. Cette information devrait être systématiquement définie pour l'ensemble des interfaces d'interconnexion du backbone  |Non  |
+|msti_link  |  |Dictionnaire où la clé est le mstiID et la valeur coût du lien pour cette MSTI  |Non  |
 |disable_stp  |false  |Si `true`, désactive le spanning-tree sur cette interface  |Non  |
 |is_uplink  |false  |Si `true`, indique que l'interface sert à raccorder un autre commutateur/équipement réseau. Sa valeur a une influence sur le comportement de la COS/QoS, du spanning tree, des restrictions du nombre d'équipements raccordés sur des interfaces et du 802.1X   |Non  |
 
@@ -992,8 +992,6 @@ ex_config_laggs:
 
 Il est possible de définir des niveaux de priorité très finement selon les flux réseau. Sous Juniper, c'est appelé CoS (Class of Service).
 Par exemple, sur [Renater](https://services.renater.fr/services_ip/classes_de_services) la QoS se base sur le champ DSCP (Differenciated Service Code Point).
-
-Pour les détails, de l'architecture CoS de Juniper, et les primitives de configuration manuelle, se référer à [Mettre en place des catégories de service (Class of service - CoS)](informatique:service:procedures:reseau:juniper:procedures:cos)
 
 Il va falloir distinguer 2 types d'interfaces réseau et leur appliquer des règles CoS distinctes :
 
