@@ -425,8 +425,8 @@ For example:
 ```yaml
 ex_config_laggs:
   - name: ae35
-    description: other_switch
     speed: 10g
+    description: other_switch
     trunk: true
     trusted: true
     vlans:
