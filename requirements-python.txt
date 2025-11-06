@@ -3,8 +3,8 @@
 #####################
 
 # Ansible base
-ansible==12.1.0
-ansible-core==2.19.3
+ansible==12.2.0
+ansible-core==2.19.4
 # Should become an ansible's dependency, but is not yet in package's requirements
 passlib==1.7.4
 
