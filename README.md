@@ -45,7 +45,7 @@ collections:
 
 | Device | Support                        |
 | ------ | ------------------------------ |
-| EX4650 | 🚧 Work in progress            |
+| EX4650 | ✅                             |
 | EX4600 | ✅                             |
 | EX4300 | ✅                             |
 | EX4100 | ✅                             |

@@ -24,7 +24,7 @@ Each model family must be assigned its own group. The groups for qualified model
 - juniper_ex4100
 - juniper_ex4300
 - juniper_ex4600
-- juniper_ex4650 *(work in progress)*
+- juniper_ex4650
 
 Critical devices, whose firmware updates require confirmation, must be assigned to the `juniper_critical_devices` group, for example:
 

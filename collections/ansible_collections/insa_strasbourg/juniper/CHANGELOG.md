@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- The EX4650 are now supported
+
 ## [1.0.4] - 2025-10-01
 
 - **BREAKING CHANGE** The MSTP interface variable `msti_link` has been renamed to a more understandable name `msti_link_cost`

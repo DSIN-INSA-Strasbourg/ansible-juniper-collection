@@ -31,7 +31,7 @@ Chaque famille de modèle doit être rattachée à un groupe qui lui est propre.
 - juniper_ex4100
 - juniper_ex4300
 - juniper_ex4600
-- juniper_ex4650 *(en cours d'intégration)*
+- juniper_ex4650
 
 Les équipements ELS **doivent** être rattachés au groupe `juniper_els`, par exemple ainsi :
 
