@@ -176,7 +176,7 @@
       item.vlans|default([])|length > 0 and
       None in item.vlans
     )
-  loop: "{{ ex_config_interfaces }}"
+  loop: "{{ ex_config_interfaces + ex_config_laggs }}"
   loop_control:
     label: "{{ item.name }}"
 
@@ -203,7 +203,7 @@
     item.vlans|default([])|length == 0 and
     not item.toip |default(false) and
     item.native_vlan is not defined
-  loop: "{{ ex_config_interfaces }}"
+  loop: "{{ ex_config_interfaces + ex_config_laggs }}"
   loop_control:
     label: "{{ item.name }}"
 
@@ -219,7 +219,7 @@
       item.1 != "all" and
       item.1 not in _ex_config_available_vlans
     )
-  loop: "{{ ex_config_interfaces | subelements('vlans', skip_missing=true) }}"
+  loop: "{{ (ex_config_interfaces + ex_config_laggs) | subelements('vlans', skip_missing=true) }}"
   loop_control:
     label: "{{ item.0.name }}"
 
@@ -233,7 +233,7 @@
     not item.member_of_lagg|default(false) and
     item.vlans|default([])|length > 1 and
     'all' in item.vlans
-  loop: "{{ ex_config_interfaces }}"
+  loop: "{{ ex_config_interfaces + ex_config_laggs }}"
   loop_control:
     label: "{{ item.name }}"
 
@@ -247,7 +247,7 @@
     not item.member_of_lagg|default(false) and
     item.vlans|default([])|length > 0 and
     item.vlans|length != item.vlans|unique|length
-  loop: "{{ ex_config_interfaces }}"
+  loop: "{{ ex_config_interfaces + ex_config_laggs }}"
   loop_control:
     label: "{{ item.name }}"
 
@@ -272,7 +272,7 @@
       ) or
       'all' in item.vlans
     )
-  loop: "{{ ex_config_interfaces }}"
+  loop: "{{ ex_config_interfaces + ex_config_laggs }}"
   loop_control:
     label: "{{ item.name }}"
 
@@ -286,7 +286,7 @@
     not item.member_of_lagg|default(false) and
     not item.trunk|default(false) and
     item.native_vlan is defined
-  loop: "{{ ex_config_interfaces }}"
+  loop: "{{ ex_config_interfaces + ex_config_laggs }}"
   loop_control:
     label: "{{ item.name }}"
 
@@ -300,7 +300,7 @@
     not item.member_of_lagg|default(false) and
     item.native_vlan is defined and
     item.native_vlan not in _ex_config_available_vlans
-  loop: "{{ ex_config_interfaces }}"
+  loop: "{{ ex_config_interfaces + ex_config_laggs }}"
   loop_control:
     label: "{{ item.name }}"
 
@@ -319,7 +319,7 @@
       'all' in item.vlans or
       item.native_vlan in item.vlans
     )
-  loop: "{{ ex_config_interfaces }}"
+  loop: "{{ ex_config_interfaces + ex_config_laggs }}"
   loop_control:
     label: "{{ item.name }}"
 
