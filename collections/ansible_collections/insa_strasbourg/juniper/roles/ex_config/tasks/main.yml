@@ -2,7 +2,7 @@
 
 # ansible-juniper-collection: Ansible collection to configure and deploy firmware on
 # Juniper EX switches
-# Copyright (C) 2019-2025 INSA Strasbourg
+# Copyright (C) 2019-2026 INSA Strasbourg
 #
 # This file is part of ansible-juniper-collection.
 #
@@ -62,6 +62,29 @@
   delegate_to: localhost
   ansible.builtin.set_fact:
     _ex_config_available_laggs: "{{ ex_config_laggs | map(attribute='name') | list }}"
+  tags: always
+
+- name: Register availables erps
+  delegate_to: localhost
+  ansible.builtin.set_fact:
+    _ex_config_available_erps: >-
+      {{
+        (ex_config_interfaces + ex_config_laggs) | selectattr('erps', 'defined') | map(attribute='erps')
+        | flatten | map(attribute='ringname') | unique | sort | list
+      }}
+  tags: always
+
+- name: Register availables erps
+  delegate_to: localhost
+  ansible.builtin.set_fact:
+    _ex_config_available_erps_detail: >-
+      {{ query('ansible.builtin.subelements', (ex_config_interfaces + ex_config_laggs), 'erps', {'skip_missing': True}) | map('combine') }}
+  tags: always
+
+- name: Register interfaces member of some erps rings
+  delegate_to: localhost
+  ansible.builtin.set_fact:
+    _ex_config_available_erps_interfaces: "{{ _ex_config_available_erps_detail | map(attribute='name') | unique | sort }}"
   tags: always
 
 - name: Register active/passive laggs (with link_protection)
@@ -165,6 +188,175 @@
     ) > 0
 
 
+- name: Ensure each erps set in interface exist in ex_config_erps
+  delegate_to: localhost
+  ansible.builtin.fail:
+    msg: >-
+      The ERPS
+      {{ _ex_config_available_erps | difference(ex_config_erps | map(attribute='ringname')) | sort }}
+      are declared in interfaces
+      {{
+        _ex_config_available_erps_detail
+        | selectattr('ringname', 'in', (_ex_config_available_erps | difference(ex_config_erps | map(attribute='ringname'))))
+        | map(attribute='name') | unique | sort
+      }}
+      but doesn't exist in ex_config_erps
+  when: >
+    _ex_config_available_erps | difference(ex_config_erps | map(attribute='ringname')) | count > 0
+
+- name: Ensure each erps interface is a trunk
+  delegate_to: localhost
+  ansible.builtin.fail:
+    msg: >-
+      The following ERPS interfaces are not in trunk mode
+      {{
+          _ex_config_available_erps_interfaces | difference(
+            (ex_config_interfaces + ex_config_laggs) | selectattr('trunk', 'defined') | selectattr('trunk', 'true') | map(attribute='name')
+          ) | unique | sort
+      }}
+  when: >
+    _ex_config_available_erps_interfaces | difference(
+      (ex_config_interfaces + ex_config_laggs) | selectattr('trunk', 'defined') | selectattr('trunk', 'true') | map(attribute='name')
+    ) | count > 0
+
+- name: Ensure each erps is set maximum once on each interfaces
+  delegate_to: localhost
+  ansible.builtin.fail:
+    msg: >-
+      ERPS '{{ item }}' is set more than once on an interface :
+      {{ _ex_config_available_erps_detail | selectattr('ringname', 'eq', item) | map(attribute='name') | sort | list }}
+  when: >
+    _ex_config_available_erps_detail | selectattr('ringname', 'eq', item) | map(attribute='name') | count
+    != _ex_config_available_erps_detail | selectattr('ringname', 'eq', item) | map(attribute='name') | unique | count
+  loop: "{{ _ex_config_available_erps }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Ensure each erps is set once on exactly 2 interfaces
+  delegate_to: localhost
+  ansible.builtin.fail:
+    msg: >-
+      ERPS '{{ item }}' is bound to
+      {{ _ex_config_available_erps_detail | selectattr('ringname', 'eq', item) | map(attribute='name') | unique | count }}
+      interface(s) instead of two :
+      {{ _ex_config_available_erps_detail | selectattr('ringname', 'eq', item) | map(attribute='name') | unique | sort | list }}
+  when: _ex_config_available_erps_detail | selectattr('ringname', 'eq', item) | map(attribute='name') | unique | count != 2
+  loop: "{{ _ex_config_available_erps }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Ensure each erps has exactly one east interface
+  delegate_to: localhost
+  ansible.builtin.fail:
+    msg: >-
+      ERPS '{{ item }}' has
+      {{
+        _ex_config_available_erps_detail | selectattr('ringname', 'eq', item)
+        | selectattr('east_interface', 'defined') | selectattr('east_interface', 'eq', true) | map(attribute='name')
+        | count
+      }}
+      east interface(s) instead of 1 :
+      {{
+        _ex_config_available_erps_detail | selectattr('ringname', 'eq', item)
+        | selectattr('east_interface', 'defined') | selectattr('east_interface', 'eq', true) | map(attribute='name') | sort
+      }}
+  when: >
+      _ex_config_available_erps_detail | selectattr('ringname', 'eq', item)
+      | selectattr('east_interface', 'defined') | selectattr('east_interface', 'eq', true) | map(attribute='name')
+      | count != 1
+  loop: "{{ _ex_config_available_erps }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Ensure each erps has exactly one west interface
+  delegate_to: localhost
+  ansible.builtin.fail:
+    msg: >-
+      ERPS '{{ item }}' has
+      {{
+        _ex_config_available_erps_detail | selectattr('ringname', 'eq', item)
+        | selectattr('west_interface', 'defined') | selectattr('west_interface', 'eq', true) | map(attribute='name')
+        | count
+      }}
+      west interface(s) instead of 1 :
+      {{
+        _ex_config_available_erps_detail | selectattr('ringname', 'eq', item)
+        | selectattr('west_interface', 'defined') | selectattr('west_interface', 'eq', true) | map(attribute='name') | sort
+      }}
+  when: >
+      _ex_config_available_erps_detail | selectattr('ringname', 'eq', item)
+      | selectattr('west_interface', 'defined') | selectattr('west_interface', 'eq', true) | map(attribute='name')
+      | count != 1
+  loop: "{{ _ex_config_available_erps }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Ensure each east and west interfaces of each erps are bound on two different physical interfaces
+  delegate_to: localhost
+  ansible.builtin.fail:
+    msg: >-
+      ERPS '{{ item }}' east and west interface are bound to the same physical interface :
+      {{
+        (
+          (
+            _ex_config_available_erps_detail | selectattr('ringname', 'eq', item)
+            | selectattr('east_interface', 'defined') | selectattr('east_interface', 'eq', true) | map(attribute='name')
+          ) + (
+            _ex_config_available_erps_detail | selectattr('ringname', 'eq', item)
+            | selectattr('west_interface', 'defined') | selectattr('west_interface', 'eq', true) | map(attribute='name')
+          )
+        ) | unique
+      }}
+  when: >
+    (
+      (
+        _ex_config_available_erps_detail | selectattr('ringname', 'eq', item)
+        | selectattr('east_interface', 'defined') | selectattr('east_interface', 'eq', true) | map(attribute='name')
+      ) + (
+        _ex_config_available_erps_detail | selectattr('ringname', 'eq', item)
+        | selectattr('west_interface', 'defined') | selectattr('west_interface', 'eq', true) | map(attribute='name')
+      )
+    ) | unique | count != 2
+  loop: "{{ _ex_config_available_erps }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Ensure each erps has no more than one ring_protection_link_end
+  delegate_to: localhost
+  ansible.builtin.fail:
+    msg: >-
+      The {{ item }} ERPS have more than one ring_protection_link_end set, in interfaces
+      {{ _ex_config_available_erps_detail | selectattr('ringname', 'eq', item)
+        | selectattr('ring_protection_link_end', 'defined') | selectattr('ring_protection_link_end', 'eq', true) | map(attribute='name') | sort
+      }}
+  when: >
+    _ex_config_available_erps_detail | selectattr('ringname', 'eq', item)
+    | selectattr('ring_protection_link_end', 'defined') | selectattr('ring_protection_link_end', 'eq', true) | map(attribute='name') | count > 1
+  loop: "{{ _ex_config_available_erps }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Ensure each vlan specified in erps is an existing vlan
+  delegate_to: localhost
+  ansible.builtin.fail:
+    msg: >-
+      Some unknown vlan are set in ERPS '{{ item }}' :
+      {{
+          (
+            [(ex_config_erps | selectattr('ringname', 'eq', item)).0.control_vlan]
+            + (ex_config_erps | selectattr('ringname', 'eq', item)).0.data_vlans
+          ) | difference(_ex_config_available_vlans) | sort
+      }}
+  when: >
+    (
+      [(ex_config_erps | selectattr('ringname', 'eq', item)).0.control_vlan]
+      + (ex_config_erps | selectattr('ringname', 'eq', item)).0.data_vlans
+    ) | difference(_ex_config_available_vlans) | length > 0
+  loop: "{{ _ex_config_available_erps }}"
+  loop_control:
+    label: "{{ item }}"
+
+
 - name: Ensure no vlan is set to 'None'
   delegate_to: localhost
   ansible.builtin.fail:
@@ -172,6 +364,7 @@
   when: >
     not item.used_by_lagg_or_vcport|default(false) and
     not item.member_of_lagg|default(false) and
+    not item.name in _ex_config_available_erps_interfaces and
     (
       item.vlans|default([])|length > 0 and
       None in item.vlans
@@ -202,7 +395,8 @@
     item.portmirroring is not defined and
     item.vlans|default([])|length == 0 and
     not item.toip |default(false) and
-    item.native_vlan is not defined
+    item.native_vlan is not defined and
+    item.name not in _ex_config_available_erps_interfaces
   loop: "{{ ex_config_interfaces + ex_config_laggs }}"
   loop_control:
     label: "{{ item.name }}"

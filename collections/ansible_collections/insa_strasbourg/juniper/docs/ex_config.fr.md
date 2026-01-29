@@ -488,6 +488,87 @@ ex_config_interfaces:
 
 Une fois cette configuration déployée, les 2 interfaces pourront être reconfigurées de la manière désirée.
 
+### Configuration d'un anneau Ethernet Ring Protection Switching (erps)
+
+> [!WARNING]
+> Bien que le rôle soit conçu pour prendre en charge des anneaux imbriqués ou en échelle, ces cas de figures n'ont pas été testés
+
+Ressources :
+
+- [Understanding Ethernet Ring Protection Switching](https://www.juniper.net/documentation/us/en/software/junos/high-availability/topics/topic-map/ethernet-ring-protection-switching-understanding.html)
+- [Configuring Ethernet Ring Protection Switching on Switches](https://www.juniper.net/documentation/en_US/junos/topics/task/configuration/ethernet-ring-protection-cli.html)
+
+La configuration globale des anneaux se fait via la variable `ex_config_erps`, une liste déclarant chaque anneau, et dont chaque élément peut avoir les paramètres suivants :
+
+| Option | Valeur par défaut | Description | Obligatoire |
+| --- | --- | --- | --- |
+|ringname |*N/A* |Nom de l'anneau (doit être unique) |Oui |
+|control_vlan |*N/A* |Nom du VLAN dédié au contrôle de cet anneau |Oui |
+|data_vlans |*N/A* |Liste des noms des VLAN de données transitant sur l'anneau |Oui |
+|guard_interval |*valeur par défaut de l'équipement* |Intervalle de garde, en millisecondes (10-2000). Empêche les nœuds de l'anneau de recevoir des messages RAPS obsolètes |Non |
+|restore_interval |*valeur par défaut de l'équipement* |**Appliqué uniquement sur le nœud propriétaire de l'anneau**. Délai d'attente avant rétablissement, en minutes (5-12 ou 1-12 selon équipement). Temps pendant lequel le nœud propriétaire attend après le rétablissement de la dernière défaillance, afin de s'assurer de la stabilité de l'anneau avant de rétablir le fonctionnement de l'anneau tel que paramétré |Non |
+|compatibility_version |*valeur par défaut de l'équipement* |Version de la norme UIT-T G.8032/Y.1344 à utiliser (1 ou 2). Les équipements legacy (non-ELS) sont *a priori* uniquement compatibles avec la version 1. **Directive exploitée uniquement sur les commutateurs ELS**. |Non |
+
+Une fois les anneaux déclarés, il ne reste plus qu'à déclarer leurs interfaces (physique ou lagg) Est/Ouest, et indiquer quelle sera l'interface de fin.
+
+Variables d'interfaces spécifiques à une interface physique `ex_config_interfaces` ou à une interface lagg `ex_config_laggs` :
+
+| Option (clé) | Option de chaque élément de la liste | Valeur par défaut | Description | Obligatoire |
+| --- | --- | --- | --- | --- |
+|erps |  |[]  |Liste des anneaux auxquels l'interface est associée |Non |
+|     |ringname  |*N/A* |  |Oui |
+|     |east_interface  |False |Marque l'interface comme interface Est pour l'anneau spécifié par ringname  |Non |
+|     |west_interface  |False |Marque l'interface comme interface Ouest pour l'anneau spécifié par ringname  |Non |
+|     |ring_protection_link_end  |False |Marque l'interface comme bloquée par défaut en fonctionnement nominal, et déclare l'équipement comme propriétaire de l'anneau. **Il DOIT y avoir une et une seule interface avec cette valeur à True dans tout l'anneau, et le rôle ne peut pas assurer la vérification de cette contrainte**  |Non |
+
+#### Particularités des interfaces membres d'un anneau
+
+Une interface membre d'un anneau doit impérativement être déclarée comme trunk, puisqu'elle fera transiter au minimum un vlan de données et le vlan de contrôle de l'anneau.
+
+ERPS étant incompatible avec les protocles spanning-tree, le rôle désactivera automatiquement le spanning-tree sur toutes les interfaces membres d'un anneau.
+
+Le rôle va automatiquement paramétrer les VLAN de l'interface en aggrégeant :
+
+1. Les VLANs de données `data_vlans` déclarés pour chaque anneau dont l'interface est membre
+2. Les VLANs de contrôle `control_vlan` déclarés pour chaque anneau dont l'interface est membre
+3. Les VLANs éventuellement déclarés dans la configuration de l'interface. C'est possible, même si dans l'usage courant il n'y a probablement aucun VLAN à déclarer au niveau de l'interface
+
+#### Exemple
+
+```yaml
+ex_config_erps:
+  - ringname: erps_ring1
+    control_vlan: erps-control-ring1
+    data_vlans:
+      - employees
+      - students
+      - storage
+
+  - ringname: erps_ring2
+    control_vlan: erps-control-ring2
+    data_vlans:
+      - employees
+      - students
+```
+
+```yaml
+ex_config_interfaces:
+  - name: ge-0/0/0
+    trunk: true
+    trusted: true
+    erps:
+      - ringname: erps_ring1
+        east_interface: true
+        ring_protection_link_end: true
+
+  - name: ge-0/0/1
+    trunk: true
+    trusted: true
+    erps:
+      - ringname: erps_ring1
+        west_interface: true
+```
+
 ### Mise en place de port-mirroring
 
 Il est parfois nécessaire de mettre en oeuvre du port-mirroring afin d'effectuer des captures réseau.

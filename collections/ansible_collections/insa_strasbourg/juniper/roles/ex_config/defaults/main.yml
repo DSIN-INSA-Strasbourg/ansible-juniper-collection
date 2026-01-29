@@ -2,7 +2,7 @@
 
 # ansible-juniper-collection: Ansible collection to configure and deploy firmware on
 # Juniper EX switches
-# Copyright (C) 2019-2025 INSA Strasbourg
+# Copyright (C) 2019-2026 INSA Strasbourg
 #
 # This file is part of ansible-juniper-collection.
 #
@@ -107,6 +107,8 @@ ex_config_vlans: []
   # - name: vlan11
   #   description: "VLAN 11 desc"
   #   vlanid: 11
+
+ex_config_erps: []
 
 ex_config_enable_rootprotection: false
 

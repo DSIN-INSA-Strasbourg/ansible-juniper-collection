@@ -2,7 +2,7 @@
 {#
 ansible-juniper-collection: Ansible collection to configure and deploy firmware on
 Juniper EX switches
-Copyright (C) 2019-2025 INSA Strasbourg
+Copyright (C) 2019-2026 INSA Strasbourg
 
 This file is part of ansible-juniper-collection.
 
@@ -628,10 +628,35 @@ interfaces {
             family ethernet-switching;
         }
         {% else %}
+            {# ERPS : merge interface vlans (should be empty) with rings data and protection vlans #}
+            {% set ifrings = namespace(names=_ex_config_available_erps_detail | selectattr('name', 'eq', interface.name) | map(attribute='ringname') | unique) %}
+            {% 
+                set ifvlans = namespace(vlans=
+                    (
+                        (interface.vlans|default([]) + [interface.native_vlan|default([])]|flatten)
+                        + (ex_config_erps | selectattr('ringname', 'in', ifrings.names) | map(attribute='control_vlan'))
+                        + (ex_config_erps | selectattr('ringname', 'in', ifrings.names) | map(attribute='data_vlans') | flatten)
+                    ) | unique | sort
+                )
+            %}
+            {% if interface.name in _ex_config_available_erps_interfaces %}
+                {# VLAN IDs must be declared in ascending order to guarantee idempotence #}
+                {% 
+                    set erpsifvlansid = namespace(vlans=
+                        (ex_config_vlans | selectattr('name', 'in', ifvlans.vlans) | map(attribute='vlanid') | map('int') | sort)
+                    )
+                %}
+                {# Order VLAN names to match the ascending order of their ID #}
+                {% 
+                    set erpsifvlans = namespace(vlans=
+                        (ex_config_vlans | selectattr('vlanid', 'in', erpsifvlansid.vlans) | map(attribute='name'))
+                    )
+                %}
+            {% endif %}
             {# Jumbo frames #}
             {% set jumbo = namespace(found=false) %}
             {% for vlan in ex_config_vlans if vlan.jumboframes|default(false) %}
-                {% for ifvlan in interface.vlans|default([]) if vlan.name == ifvlan or ifvlan == "all" %}
+                {% for ifvlan in ifvlans.vlans|default([]) if vlan.name == ifvlan or ifvlan == "all" %}
                     {% if not jumbo.found %}
                         {% set jumbo.found = true %}
         mtu 9216; # Jumbo frames
@@ -651,12 +676,34 @@ interfaces {
             {% else %}
                 interface-mode access;
             {% endif %}
-            {% if (interface.vlans|default([]) + [interface.native_vlan|default([])]|flatten)|default([])|length > 0 %}
+            {% if ifvlans.vlans|default([])|length > 0 %}
                 vlan {
-                {% if (interface.vlans|default([]) + [interface.native_vlan|default([])]|flatten)|length == 1 %}
-                    members {{ (interface.vlans|default([]) + [interface.native_vlan|default([])]|flatten).0 }};
+                {% if ifvlans.vlans|length == 1 %}
+                    {% if interface.name in _ex_config_available_erps_interfaces %}
+                    {# 
+                        From the documentation :
+                            When EX2300 and EX3400 ERPS switches have a VLAN-ID configured with a name under an interface hierarchy, a commit error occurs.
+                            Avoid this by configuring VLAN-IDs using numbers when they are under an interface hierarchy with ERPS configured in the switch.
+                        Thank you so much for you quality and consistency, Juniper.
+                    #}
+                    # members {{ erpsifvlans.vlans.0 }};
+                    members {{ erpsifvlansid.vlans.0 }};
+                    {% else %}
+                    members {{ ifvlans.vlans.0 }};
+                    {% endif %}
                 {% else %}
-                    members [ {{ (interface.vlans|default([]) + [interface.native_vlan|default([])]|flatten)|join(' ') }} ];
+                    {% if interface.name in _ex_config_available_erps_interfaces %}
+                    {# 
+                        From the documentation :
+                            When EX2300 and EX3400 ERPS switches have a VLAN-ID configured with a name under an interface hierarchy, a commit error occurs.
+                            Avoid this by configuring VLAN-IDs using numbers when they are under an interface hierarchy with ERPS configured in the switch.
+                        Thank you so much for you quality and consistency, Juniper.
+                    #}
+                    # members [ {{ erpsifvlans.vlans|join(' ') }} ];
+                    members [ {{ erpsifvlansid.vlans|join(' ') }} ];
+                    {% else %}
+                    members [ {{ ifvlans.vlans|join(' ') }} ];
+                    {% endif %}
                 {% endif %}
                 }
             {% endif %}
@@ -698,10 +745,35 @@ interfaces {
             }
     {% endif %}
         }
+        {# ERPS : merge interface vlans (should be empty) with rings data and protection vlans #}
+        {% set ifrings = namespace(names=_ex_config_available_erps_detail | selectattr('name', 'eq', interface.name) | map(attribute='ringname') | unique) %}
+        {% 
+            set ifvlans = namespace(vlans=
+                (
+                    (interface.vlans|default([]) + [interface.native_vlan|default([])]|flatten)
+                    + (ex_config_erps | selectattr('ringname', 'in', ifrings.names) | map(attribute='control_vlan'))
+                    + (ex_config_erps | selectattr('ringname', 'in', ifrings.names) | map(attribute='data_vlans') | flatten)
+                ) | unique | sort
+            )
+        %}
+        {% if interface.name in _ex_config_available_erps_interfaces %}
+            {# VLAN IDs must be declared in ascending order to guarantee idempotence #}
+            {% 
+                set erpsifvlansid = namespace(vlans=
+                    (ex_config_vlans | selectattr('name', 'in', ifvlans.vlans) | map(attribute='vlanid') | map('int') | sort)
+                )
+            %}
+            {# Order VLAN names to match the ascending order of their ID #}
+            {% 
+                set erpsifvlans = namespace(vlans=
+                    (ex_config_vlans | selectattr('vlanid', 'in', erpsifvlansid.vlans) | map(attribute='name'))
+                )
+            %}
+        {% endif %}
         {# Jumbo frames #}
         {% set jumbo = namespace(found=false) %}
         {% for vlan in ex_config_vlans if vlan.jumboframes|default(false) %}
-            {% for ifvlan in interface.vlans|default([]) if vlan.name == ifvlan or ifvlan == "all" %}
+            {% for ifvlan in ifvlans.vlans|default([]) if vlan.name == ifvlan or ifvlan == "all" %}
                 {% if not jumbo.found %}
                     {% set jumbo.found = true %}
         mtu 9216; # Jumbo frames
@@ -721,12 +793,34 @@ interfaces {
         {% else %}
                 interface-mode access;
         {% endif %}
-        {% if (interface.vlans|default([]) + [interface.native_vlan|default([])]|flatten)|length > 0 %}
+        {% if ifvlans.vlans|default([])|length > 0 %}
                 vlan {
-            {% if (interface.vlans|default([]) + [interface.native_vlan|default([])]|flatten)|length == 1 %}
-                    members {{ (interface.vlans|default([]) + [interface.native_vlan|default([])]|flatten).0 }};
+            {% if ifvlans.vlans|length == 1 %}
+                {% if interface.name in _ex_config_available_erps_interfaces %}
+                {# 
+                    From the documentation :
+                        When EX2300 and EX3400 ERPS switches have a VLAN-ID configured with a name under an interface hierarchy, a commit error occurs.
+                        Avoid this by configuring VLAN-IDs using numbers when they are under an interface hierarchy with ERPS configured in the switch.
+                    Thank you so much for you quality and consistency, Juniper.
+                #}
+                    # members {{ erpsifvlans.vlans.0 }};
+                    members {{ erpsifvlansid.vlans.0 }};
+                {% else %}
+                    members {{ ifvlans.vlans.0 }};
+                {% endif %}
             {% else %}
-                    members [ {{ (interface.vlans|default([]) + [interface.native_vlan|default([])]|flatten)|join(' ') }} ];
+                {% if interface.name in _ex_config_available_erps_interfaces %}
+                {# 
+                    From the documentation :
+                        When EX2300 and EX3400 ERPS switches have a VLAN-ID configured with a name under an interface hierarchy, a commit error occurs.
+                        Avoid this by configuring VLAN-IDs using numbers when they are under an interface hierarchy with ERPS configured in the switch.
+                    Thank you so much for you quality and consistency, Juniper.
+                #}
+                    # members [ {{ erpsifvlans.vlans|join(' ') }} ];
+                    members [ {{ erpsifvlansid.vlans|join(' ') }} ];
+                {% else %}
+                    members [ {{ ifvlans.vlans|join(' ') }} ];
+                {% endif %}
             {% endif %}
                 }
         {% endif %}
@@ -922,6 +1016,90 @@ protocols {
         }
 {% endif %}
     }
+    {# ERPS #}
+{% if _ex_config_available_erps | length > 0 %}
+    protection-group {
+    {% for ringname in _ex_config_available_erps %}
+        {% set ring = namespace(conf=(ex_config_erps | selectattr('ringname', 'eq', ringname)).0) %}
+        {# VLAN IDs must be declared in ascending order to guarantee idempotence #}
+        {%
+            set datavlansids = namespace(vlans=
+                (ex_config_vlans | selectattr('name', 'in', ring.conf.data_vlans) | map(attribute='vlanid') | map('int') | sort)
+            )
+        %}
+        {# Order VLAN names to match the ascending order of their ID #}
+        {% 
+            set datavlans = namespace(vlans=
+                (ex_config_vlans | selectattr('vlanid', 'in', datavlansids.vlans) | map(attribute='name'))
+            )
+        %}
+        ethernet-ring {{ ringname }} {
+        {% if (
+                _ex_config_available_erps_detail | rejectattr('ringname', 'ne', ringname)
+                | rejectattr('ring_protection_link_end', 'undefined') | rejectattr('ring_protection_link_end', 'ne', true)
+            ) | length > 0 
+        %}
+            ring-protection-link-owner;
+            {% if ring.conf.restore_interval is defined %}
+                restore-interval {{ ring.conf.restore_interval }};
+            {% endif %}
+        {% endif %}
+        {% if ring.conf.guard_interval is defined %}
+            guard-interval {{ ring.conf.guard_interval }};
+        {% endif %}
+        {% if ring.conf.compatibility_version is defined %}
+            compatibility-version {{ ring.conf.compatibility_version }};
+        {% endif %}
+            east-interface {
+        {% if (
+                _ex_config_available_erps_detail | rejectattr('ringname', 'ne', ringname)
+                | rejectattr('ring_protection_link_end', 'undefined') | rejectattr('ring_protection_link_end', 'ne', true)
+                | selectattr('east_interface', 'defined') | selectattr('east_interface', 'eq', true)
+            ) | length > 0 
+        %}
+                ring-protection-link-end;
+        {% endif %}
+                control-channel {
+                    {{ (
+                            _ex_config_available_erps_detail | selectattr('ringname', 'eq', ringname)
+                            | selectattr('east_interface', 'defined') | selectattr('east_interface', 'eq', true) | map(attribute='name')
+                        ).0
+                    }};
+                    vlan {{ (ex_config_vlans | selectattr('name', 'eq', ring.conf.control_vlan) | map(attribute='vlanid')).0 }}; # {{ ring.conf.control_vlan }}
+                }
+            }
+            west-interface {
+        {% if (
+                _ex_config_available_erps_detail | rejectattr('ringname', 'ne', ringname)
+                | rejectattr('ring_protection_link_end', 'undefined') | rejectattr('ring_protection_link_end', 'ne', true)
+                | selectattr('west_interface', 'defined') | selectattr('west_interface', 'eq', true)
+            ) | length > 0 
+        %}
+                ring-protection-link-end;
+        {% endif %}
+                control-channel {
+                    {{ (
+                            _ex_config_available_erps_detail | selectattr('ringname', 'eq', ringname)
+                            | selectattr('west_interface', 'defined') | selectattr('west_interface', 'eq', true) | map(attribute='name')
+                        ).0
+                    }};
+                    vlan {{ (ex_config_vlans | selectattr('name', 'eq', ring.conf.control_vlan) | map(attribute='vlanid')).0 }}; # {{ ring.conf.control_vlan }}
+                }
+            }
+            control-vlan {{ (ex_config_vlans | selectattr('name', 'eq', ring.conf.control_vlan) | map(attribute='vlanid')).0 }}; # {{ ring.conf.control_vlan }}
+            data-channel {
+        {% if datavlansids.vlans|length == 1 %}
+                # vlan {{ datavlans.vlans.0 }};
+                vlan {{ datavlansids.vlans.0 }};
+        {% else %}
+                # vlan [ {{ ' '.join(datavlans.vlans) }} ];
+                vlan [ {{ ' '.join(datavlansids.vlans | map('string')) }} ];
+        {% endif %}
+            }
+        }
+    {% endfor %}
+    }
+{% endif %}
     {# RSTP #}
 {% if ex_config_stp.protocol|default("None") == "rstp" %}
     rstp {
@@ -933,7 +1111,7 @@ protocols {
         }
     {% for interface in ex_config_interfaces + ex_config_laggs if not interface.used_by_lagg_or_vcport|default(false) and interface.member_of_lagg is not defined and interface.portmirroring is not defined %}
         {% set currentif = namespace(opts=[]) %}
-        {% if interface.rtg is defined %}
+        {% if interface.rtg is defined or interface.name in _ex_config_available_erps_interfaces %}
             {{- currentif.opts.append("disable;") -}}
         {% else %}
             {% if not interface.is_uplink|default(false) %}
@@ -975,7 +1153,7 @@ protocols {
         }
     {% for interface in ex_config_interfaces + ex_config_laggs if not interface.used_by_lagg_or_vcport|default(false) and interface.member_of_lagg is not defined and interface.portmirroring is not defined %}
         {% set currentif = namespace(opts=[]) %}
-        {% if interface.rtg is defined %}
+        {% if interface.rtg is defined or interface.name in _ex_config_available_erps_interfaces %}
             {{- currentif.opts.append("disable;") -}}
         {% else %}
             {% if not interface.is_uplink|default(false) %}
@@ -1012,7 +1190,7 @@ protocols {
             {% set currentmsti.vlans = (currentmsti.vlans | union(_ex_config_mstp_undefined_vlanids) | list | sort) %}
         {% endif %}
             vlan [ {{ (currentmsti.vlans | vlan_parser(9999999)).0.split(',') | join(' ') }} ];
-        {% for interface in ex_config_interfaces + ex_config_laggs if (not interface.is_uplink|default(false) or interface.stp_link_cost is defined) and not interface.used_by_lagg_or_vcport|default(false) and interface.member_of_lagg is not defined and interface.portmirroring is not defined and interface.rtg is not defined %}
+        {% for interface in ex_config_interfaces + ex_config_laggs if (not interface.is_uplink|default(false) or interface.stp_link_cost is defined) and not interface.used_by_lagg_or_vcport|default(false) and interface.member_of_lagg is not defined and interface.portmirroring is not defined and interface.rtg is not defined and interface.name not in _ex_config_available_erps_interfaces %}
             {% set currentif = namespace(opts=[]) %}
             {% if interface.msti_link_cost is defined and msti.id in interface.msti_link_cost %}
                 {{- currentif.opts.append("cost " ~ interface.msti_link_cost[msti.id] ~ ";") -}}
@@ -1262,12 +1440,30 @@ vlans {
             {# Port-security interfaces trust settings #}
             {% set untrusted = [] %}
             {% set trusted = [] %}
-            {% for interface in ex_config_interfaces + ex_config_laggs if ("all" in interface.vlans|default([]) or vlan.name in interface.vlans|default([])) and not interface.used_by_lagg_or_vcport|default(false) and interface.member_of_lagg is not defined and not interface.disabled|default(false) %}
-                {% if not interface.trunk|default(false) and interface.dhcptrusted|default(ex_config_dhcptrusted_default|default(false)) %}
-                    {{- trusted.append(interface) -}}
-                {% endif %}
-                {% if interface.trunk|default(false) and not interface.dhcptrusted|default(ex_config_dhcptrusted_default|default(true)) %}
-                    {{- untrusted.append(interface) -}}
+            {% for interface in ex_config_interfaces + ex_config_laggs %}
+                {# ERPS : merge interface vlans (should be empty) with rings data and protection vlans #}
+                {% set ifrings = namespace(names=_ex_config_available_erps_detail | selectattr('name', 'eq', interface.name) | map(attribute='ringname') | unique) %}
+                {% 
+                    set ifvlans = namespace(vlans=
+                        (
+                            (interface.vlans|default([]) + [interface.native_vlan|default([])]|flatten)
+                            + (ex_config_erps | selectattr('ringname', 'in', ifrings.names) | map(attribute='control_vlan'))
+                            + (ex_config_erps | selectattr('ringname', 'in', ifrings.names) | map(attribute='data_vlans') | flatten)
+                        ) | unique | sort
+                    )
+                %}
+                {% if ("all" in ifvlans.vlans|default([])
+                    or vlan.name in ifvlans.vlans|default([]))
+                    and not interface.used_by_lagg_or_vcport|default(false)
+                    and interface.member_of_lagg is not defined
+                    and not interface.disabled|default(false)
+                %}
+                    {% if not interface.trunk|default(false) and interface.dhcptrusted|default(ex_config_dhcptrusted_default|default(false)) %}
+                        {{- trusted.append(interface) -}}
+                    {% endif %}
+                    {% if interface.trunk|default(false) and not interface.dhcptrusted|default(ex_config_dhcptrusted_default|default(true)) %}
+                        {{- untrusted.append(interface) -}}
+                    {% endif %}
                 {% endif %}
             {% endfor %}
             {% if trusted|length > 0 %}

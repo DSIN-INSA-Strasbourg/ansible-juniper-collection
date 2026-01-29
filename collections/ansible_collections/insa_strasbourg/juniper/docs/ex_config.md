@@ -488,6 +488,87 @@ ex_config_interfaces:
 
 Once this configuration is deployed, the two interfaces can be reconfigured as desired.
 
+### Configuring an Ethernet Ring Protection Switching (ERPS)
+
+> [!WARNING]
+> Although the role is designed to support nested or ladder rings, these scenarios have not been tested
+
+Resources:
+
+- [Understanding Ethernet Ring Protection Switching](https://www.juniper.net/documentation/us/en/software/junos/high-availability/topics/topic-map/ethernet-ring-protection-switching-understanding.html)
+- [Configuring Ethernet Ring Protection Switching on Switches](https://www.juniper.net/documentation/en_US/junos/topics/task/configuration/ethernet-ring-protection-cli.html)
+
+The global configuration of the rings is done via the variable `ex_config_erps`, a list declaring each ring, and each element of which can have the following parameters:
+
+| Option | Default Value | Description | Required |
+| --- | --- | --- | --- |
+|ringname |*N/A* | Ring name (must be unique) |Yes |
+|control_vlan |*N/A* | Name of the VLAN dedicated to controlling this ring |Yes |
+|data_vlans |*N/A* | List of names of data VLANs transiting through the ring |Yes |
+|guard_interval |*device default value* | Guard interval, in milliseconds (10-2000). Prevents ring nodes from receiving outdated RAPS messages |No |
+|restore_interval |*device default value* |**Applied only to the ring owner node**. Timeout before recovery, in minutes (5-12 or 1-12 depending on the device). Time during which the owner node waits after the last failure has been resolved, to ensure ring stability before restoring ring operation as configured |No|
+|compatibility_version |*default value of the equipment* |Version of the ITU-T G.8032/Y.1344 standard to use (1 or 2). Legacy (non-ELS) equipment is *in principle* only compatible with version 1. **Directive used only on ELS switches**. |No|
+
+Once the rings are declared, all that remains is to declare their East/West interfaces (physical or lagg) and indicate which will be the terminating interface.
+
+Interface variables specific to a physical interface `ex_config_interfaces` or a lagg interface `ex_config_laggs`:
+
+| Option (key) | Option for each item in the list | Default value | Description | Required |
+| --- | --- | --- | --- | --- |
+| erps | | [] | List of rings to which the interface is associated | No |
+| | ringname | *N/A* | | Yes |
+| | east_interface | False | Marks the interface as the East interface for the ring specified by ringname | No |
+| | west_interface | False | Marks the interface as the West interface for the ring specified by ringname | No |
+| | ring_protection_link_end | False | Marks the interface as blocked by default during normal operation, and declares the device as the ring owner. **There MUST be one and only one interface with this value set to True in the entire ring, and the role cannot enforce this constraint.** |No |
+
+#### Specifics of the interfaces member of a ring
+
+A ring member interface must be declared as a trunk, as it will carry at least one data VLAN and the ring's control VLAN.
+
+Since ERPS is incompatible with spanning-tree protocols, the role will automatically disable spanning-tree on all ring member interfaces.
+
+The role will automatically configure the interface's VLANs by aggregating:
+
+1. The data VLANs `data_vlans` declared for each ring associated to the interface
+2. The control VLANs `control_vlans` declared for each ring associated to the interface
+3. Any VLANs declared in the interface's configuration. This is possible, even though in common usage there are probably no VLANs to declare at the interface level
+
+#### Example
+
+```yaml
+ex_config_erps:
+  - ringname: erps_ring1
+    control_vlan: erps-control-ring1
+    data_vlans:
+      - employees
+      - students
+      - storage
+
+  - ringname: erps_ring2
+    control_vlan: erps-control-ring2
+    data_vlans:
+      - employees
+      - students
+```
+
+```yaml
+ex_config_interfaces:
+  - name: ge-0/0/0
+    trunk: true
+    trusted: true
+    erps:
+      - ringname: erps_ring1
+        east_interface: true
+        ring_protection_link_end: true
+
+  - name: ge-0/0/1
+    trunk: true
+    trusted: true
+    erps:
+      - ringname: erps_ring1
+        west_interface: true
+```
+
 ### Setting up port mirroring
 
 It is sometimes necessary to implement port mirroring to perform network captures.

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added support for Ethernet Ring Protection Switching (ERPS)
+
 ### Fixed
 
 - Most VLAN configuration checks were previously performed only on physical interfaces. Now they are also performed on LAGGs
