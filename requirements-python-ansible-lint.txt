@@ -2,31 +2,30 @@
 # Main dependencies #
 #####################
 
-ansible-lint==25.8.2
+ansible-lint==26.1.1
 
 
 #####################################################################
 # Sub-dependencies, frozen here to ensure consistency across setups #
 #####################################################################
 
-ansible-compat==25.8.1
-attrs==25.3.0
-black==25.1.0
+ansible-compat==25.12.0
+attrs==25.4.0
+black==26.1.0
 bracex==2.6
-click==8.2.1
-filelock==3.19.1
-importlib_metadata==8.7.0
-jsonschema==4.25.1
+click==8.3.1
+distro==1.9.0
+filelock==3.20.3
+jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
 mypy_extensions==1.1.0
-pathspec==0.12.1
-platformdirs==4.4.0
-referencing==0.36.2
-rpds-py==0.27.1
-ruamel.yaml==0.18.15
-ruamel.yaml.clib==0.2.12
+pathspec==1.0.4
+platformdirs==4.5.1
+pytokens==0.4.1
+referencing==0.37.0
+rpds-py==0.30.0
+ruamel.yaml==0.19.1
+ruamel.yaml.clib==0.2.15
 subprocess-tee==0.4.2
-typing_extensions==4.15.0
 wcmatch==10.1
-yamllint==1.37.1
-zipp==3.23.0
+yamllint==1.38.0

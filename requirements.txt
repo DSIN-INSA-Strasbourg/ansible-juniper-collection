@@ -1,11 +1,8 @@
-# junipernetworks.junosand juniper.device collections requirements
-# https://github.com/ansible-collections/junipernetworks.junos/blob/main/requirements.txt
+# juniper.device collections requirements
 # https://github.com/Juniper/ansible-junos-stdlib/blob/master/requirements.txt
-ansible-pylibssh==1.2.2
 jsnapy==1.3.8
-junos-eznc==2.7.5
+junos-eznc==2.7.6
 jxmlease==1.0.3
-looseversion==1.3.0
 ncclient==0.7.0  # On version change, ensure the patch from reset_ansible_venv is still working
 paramiko==4.0.0
 scp==0.15.0

@@ -39,10 +39,8 @@ tags:
 # L(specifiers,https://python-semanticversion.readthedocs.io/en/latest/#requirement-specification). Multiple version
 # range specifiers can be set and are separated by ','
 dependencies:
-  juniper.device: "1.0.9"
-  junipernetworks.junos: ">=11.0.0"  # Installed with ansible
-  ansible.netcommon: ">=8.1.0"  # Installed with ansible, required by junipernetworks.junos
-  ansible.utils: ">=6.0.0"  # # Provide 'ansible.utils.ipaddr' filter used in templates
+  juniper.device: "2.0.1"
+  ansible.utils: "6.0.1"  # Provide 'ansible.utils.ipaddr' filter used in templates
 
 # The URL of the originating SCM repository
 repository: https://github.com/DSIN-INSA-Strasbourg/ansible-juniper-collection
