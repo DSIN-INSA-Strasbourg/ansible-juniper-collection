@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Updated for Ansible 2.20 and Python 3.14. Python 3.12 isn't supported anymore
+- Updated for Ansible 2.20 and Python 3.14. Python 3.11 isn't supported anymore
 
 ## [1.0.6] - 2026-01-29
 
