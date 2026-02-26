@@ -502,12 +502,18 @@ system {
             security info;
             interactive-commands any;
             port {{ syslogserver.port }};
+{% if ex_config_ignore_log_messages | length > 0 %}
+            match "!({{ '|'.join(ex_config_ignore_log_messages) }})";
+{% endif %}
         }
 {% endfor %}
         file messages {
             any notice;
             authorization info;
             security info;
+{% if ex_config_ignore_log_messages | length > 0 %}
+            match "!({{ '|'.join(ex_config_ignore_log_messages) }})";
+{% endif %}
         }
         file interactive-commands {
             interactive-commands any;

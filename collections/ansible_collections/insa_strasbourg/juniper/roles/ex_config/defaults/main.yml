@@ -81,6 +81,7 @@ ex_config_stormcontrol_monitor_unregistered_multicast: false
 ex_config_stormcontrol_monitor_unknown_unicast: false
 
 ex_config_syslogservers: []
+ex_config_ignore_log_messages: []
 
 ex_config_users: []
 ex_config_user_classes: []

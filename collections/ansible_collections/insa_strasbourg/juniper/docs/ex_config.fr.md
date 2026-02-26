@@ -167,6 +167,20 @@ Les autres comptes utilisateurs sont définis à travers la variable `ex_config_
 |password  |*N/A*  |Mot de passe  |Non  |
 |ssh_pubkeys  |*N/A*  |Dictionnaire pouvant contenir une ou plusieurs des 3 clés suivantes `ssh-ecdsa`, `ssh-ed25519`, `ssh-rsa`, et en valeur la clé associée  |Non  |
 
+### Déclaration d'éventuels messages de log à ignorer
+
+Il peut arriver que le commutateur génère un même message plusieurs fois par seconde, remplissant inutilement les fichiers de log.
+Il est donc possible de déclarer une liste de regex permettant de reconnaître les messages à ignorer dans la variable `ex_config_ignore_log_messages`. Cette liste de regex sera ensuite transformée en une unique regex comme indiqué dans la [KB22177](https://supportportal.juniper.net/s/article/EX-How-to-filter-two-or-more-specific-messages-from-being-written-to-the-syslog-file).
+
+Exemple :
+
+```yaml
+ex_config_ignore_log_messages:
+  - "vlan MAC filter"
+  - "Failed to find MC RT_NH entry"
+  - "matching on Wrong nh"
+```
+
 ## Configuration des interfaces
 
 ### Configuration des VLANs
