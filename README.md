@@ -26,6 +26,24 @@ collections:
   - name: https://github.com/DSIN-INSA-Strasbourg/ansible-juniper-collection/releases/download/VERSION/insa_strasbourg-juniper-VERSION.tar.gz
 ```
 
+### Legacy devices (non-ELS) compatibility
+
+[In order to be able to connect to legacy devices](https://github.com/ncclient/ncclient/issues/526), you'll need to patch ncclient. You should consider using a dedicated virtualenv before proceding.
+If you're using [ansible-juniper-venv](https://github.com/DSIN-INSA-Strasbourg/ansible-juniper-venv), ncclient will be automatically patched by `reset_ansible_venv`. Otherwise, you have to do it yourself:
+
+```bash
+# Adapt the path to your current ncclient directory
+nccclientrootdir=/PATH/TO/lib/pythonX.YZ/site-packages/ncclient"
+
+# Backup
+cp -a "${nccclientrootdir}/transport/ssh.py" "${nccclientrootdir}/transport/ssh.py.ori"
+
+# Patch
+sed -i \
+    's/self._transport = paramiko.Transport(sock)/self._transport = paramiko.Transport(sock, disabled_algorithms={"pubkeys": ["ssh-ed25519", "rsa-sha2-512", "rsa-sha2-256"],  "keys": ["ssh-ed25519", "rsa-sha2-512", "rsa-sha2-256"]})/' \
+    "${nccclientrootdir}/transport/ssh.py"
+```
+
 ## Documentation
 
 ### Roles
