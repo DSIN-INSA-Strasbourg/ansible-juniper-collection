@@ -2,7 +2,7 @@
 
 # ansible-juniper-collection: Ansible collection to configure and deploy firmware on
 # Juniper EX switches
-# Copyright (C) 2022-2026 INSA Strasbourg
+# Copyright (C) 2025 INSA Strasbourg
 #
 # This file is part of ansible-juniper-collection.
 #
