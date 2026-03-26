@@ -21,7 +21,7 @@
 
 - name: Juniper_ex_firmware
   hosts: "{{ target | default('all') }}"
-  connection: juniper.device.pyez
+  connection: local
   gather_facts: false
   vars:
     host: "{{ inventory_hostname }}"

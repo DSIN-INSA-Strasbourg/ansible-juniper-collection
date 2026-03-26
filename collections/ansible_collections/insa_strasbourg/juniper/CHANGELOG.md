@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Changed connection plugin from `juniper.device.pyez` to `local` in playbook `ex_firmware.yml`, to avoid "*Task failed: Module failed: Unable to decode JSON from response to get_facts(). Received 'None'.*" error when gathering facts with latest ansible version (ansible==13.5.0 ansible-core==2.20.4)
+
 ## [1.0.8] - 2026-02-26
 
 ### Added
