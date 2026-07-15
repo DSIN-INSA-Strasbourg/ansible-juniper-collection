@@ -9,7 +9,7 @@ Provides following roles :
 
 ## Requirements
 
-This collection uses [junipernetworks.junos](https://github.com/ansible-collections/junipernetworks.junos) collection, [juniper.device](https://github.com/Juniper/ansible-junos-stdlib) collection and [ansible.utils.ipaddr](https://docs.ansible.com/ansible/latest/collections/ansible/utils/ipaddr_filter.html) filter. Install their requirements using pip:
+This collection uses [juniper.device](https://github.com/Juniper/ansible-junos-stdlib) collection and [ansible.utils.ipaddr](https://docs.ansible.com/ansible/latest/collections/ansible/utils/ipaddr_filter.html) filter. Install their requirements using pip:
 
 ```bash
 pip install -r requirements.txt
