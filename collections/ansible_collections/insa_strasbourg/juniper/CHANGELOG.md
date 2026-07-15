@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Updated for Ansible 2.21
+- Reverted connection plugin from `local` to `juniper.device.pyez` in playbook `ex_firmware.yml`, as juniper.device 2.0.2 fixed the "*Task failed: Module failed: Unable to decode JSON from response to get_facts(). Received 'None'.*" error when gathering facts [(ansible-junos-stdlib #816)](https://github.com/Juniper/ansible-junos-stdlib/pull/816)
 
 ## [1.0.9] - 2026-03-26
 
