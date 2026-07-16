@@ -34,7 +34,7 @@ ex_firmware_snapshot_version_format: "text"
 #   - "now" : The reboot takes effect immediately.
 #   - "+minutes" : The reboot takes effect in minutes minutes from now.
 #   - "yymmddhhmm" : The reboot takes effect at yymmddhhmm absolute time, specified as year, month, day, hour, and minute.
-ex_firmware_reboot_at: "{{ '%y%m%d0100' | strftime(ansible_date_time.epoch | int + 86400) }}"
+ex_firmware_reboot_at: "{{ '%y%m%d0100' | strftime(ansible_facts.date_time.epoch | int + 86400) }}"
 
 # Only used on virtual chassis
 # Be aware that NSSU sounds great in theory, but suffer has many caveats in practice

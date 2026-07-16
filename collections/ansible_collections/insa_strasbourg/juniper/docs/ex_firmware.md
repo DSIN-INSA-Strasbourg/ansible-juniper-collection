@@ -97,7 +97,7 @@ Paths are relative to the Ansible folder
 | Option | Default Value | Description | Required |
 | --- | --- | --- | --- |
 |ex_firmware_baseurl |[https://www.example.com/PLEASE/SET/ME](https://www.example.com/PLEASE/SET/ME) |The firmware download URL prefix, e.g. [https://www.example.com/PLEASE/SET/ME](https://www.example.com/PLEASE/SET/ME) |Yes |
-|ex_firmware_reboot_at |"{{ '%y%m%d0100' \| strftime(ansible_date_time.epoch \| int + 86400) }}" (*next day at 01:00*) |Indicates when to reboot the switch after an update. Possible values ​​are: <br/> - "now": Reboot immediately <br/> - "+minutes": Reboot after the specified number of minutes <br/> - "yymmddhhmm": Reboot at the specified date and time |No |
+|ex_firmware_reboot_at |"{{ '%y%m%d0100' \| strftime(ansible_facts.date_time.epoch \| int + 86400) }}" (*next day at 01:00*) |Indicates when to reboot the switch after an update. Possible values ​​are: <br/> - "now": Reboot immediately <br/> - "+minutes": Reboot after the specified number of minutes <br/> - "yymmddhhmm": Reboot at the specified date and time |No |
 |ex_firmware_use_nssu_on_vc |false |Indicates whether the firmware of a virtual chassis should be installed using *NSSU*, in which case the virtual chassis will not be rebooted according to `ex_firmware_reboot_at`, since its members will have been rebooted individually one after the other. **Since NSSU deployment is more of a source of problems than benefits, its use is discouraged, although possible**. If this variable is `false`, the virtual chassis firmware will be deployed to all members, which will reboot according to the instructions of `ex_firmware_reboot_at` |No |
 
 ## Switch model configuration
