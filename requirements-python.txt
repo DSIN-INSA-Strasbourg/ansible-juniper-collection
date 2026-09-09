@@ -3,8 +3,8 @@
 #####################
 
 # Ansible base
-ansible==14.2.0
-ansible-core==2.21.2
+ansible==14.4.0
+ansible-core==2.21.4
 
 # community.general.dig lookup plugin requirements
 # https://docs.ansible.com/ansible/latest/collections/community/general/dig_lookup.html#ansible-collections-community-general-dig-lookup-requirements
